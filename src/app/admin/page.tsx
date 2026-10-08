@@ -26,14 +26,10 @@ import { formatEgp, formatKcal } from '@/lib/format';
 import { Meal } from '@/features/recommendations/domain/types';
 import { createClient } from '@/lib/supabase/client';
 
-import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
-
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [meals, setMeals] = useState<Meal[]>(DEFAULT_MEALS);
+  const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isFromSupabase, setIsFromSupabase] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -65,7 +61,7 @@ export default function AdminDashboardPage() {
     topSelling: [],
   });
 
-  // جلب الوجبات والإحصائيات الحية
+  // جلب الوجبات والإحصائيات الحية من Supabase
   const loadAdminData = async () => {
     setLoading(true);
     try {
@@ -78,7 +74,6 @@ export default function AdminDashboardPage() {
         .order('created_at', { ascending: false });
 
       if (!mealsErr && mealsData && mealsData.length > 0) {
-        setIsFromSupabase(true);
         setMeals(
           mealsData.map((m: any) => ({
             id: m.id,
@@ -96,8 +91,7 @@ export default function AdminDashboardPage() {
           }))
         );
       } else {
-        setIsFromSupabase(false);
-        setMeals(DEFAULT_MEALS);
+        setMeals([]);
       }
 
       // 2. جلب الطلبات الفعلية لحساب الإحصائيات الحية الدقيقة
@@ -153,7 +147,7 @@ export default function AdminDashboardPage() {
         });
       }
     } catch {
-      setMeals(DEFAULT_MEALS);
+      setMeals([]);
     } finally {
       setLoading(false);
     }
@@ -162,38 +156,6 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     loadAdminData();
   }, []);
-
-  // إدراج وجبات فتح الله الافتراضية (15 وجبة) في Supabase بنقرة واحدة
-  const handleSeedMealsToSupabase = async () => {
-    setIsSeeding(true);
-    try {
-      const supabase = createClient();
-      for (const meal of DEFAULT_MEALS) {
-        await supabase.from('meals').upsert(
-          {
-            name_ar: meal.name_ar,
-            name_en: meal.name_en,
-            price: meal.price,
-            discount_price: meal.discount_price,
-            is_expiring_soon: meal.is_expiring_soon,
-            is_available: true,
-            total_kcal: meal.total_kcal,
-            kind: meal.kind,
-            portion_type: meal.portion_type,
-            servings: meal.servings,
-            image_url: meal.image_url,
-          },
-          { onConflict: 'name_en' }
-        );
-      }
-      await loadAdminData();
-      alert('تم إدراج وجبات فتح الله (15 وجبة) بنجاح في قاعدة بيانات Supabase!');
-    } catch (err: unknown) {
-      alert(`حدث خطأ أثناء إدراج الوجبات: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   // تبديل التوافر (Toggle Availability)
   const handleToggleAvailability = async (mealId: string, currentStatus: boolean) => {
@@ -391,19 +353,6 @@ export default function AdminDashboardPage() {
             تحديث
           </Button>
 
-          {!isFromSupabase && (
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={isSeeding}
-              onClick={handleSeedMealsToSupabase}
-              className="gap-1.5"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{isSeeding ? 'جاري الإدراج...' : 'إدراج الوجبات (15) في Supabase'}</span>
-            </Button>
-          )}
-
           <Button
             variant="ghost"
             size="sm"
@@ -493,32 +442,6 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </div>
-
-      {/* تنبيه إذا لم تكن الوجبات موجودة في Supabase بعد */}
-      {!isFromSupabase && (
-        <div className="p-4 rounded-2xl bg-[#F37A20]/10 border border-[#F37A20]/30 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-5 h-5 text-[#F37A20] shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-white">
-                تم تحميل وجبات فتح الله الافتراضية (15 وجبة كاملة)
-              </p>
-              <p className="text-xs text-zinc-400">
-                يمكنك إدراجها فوراً بنقرة واحدة في جدول meals بقاعدة بيانات Supabase، أو تشغيل سكريبت SQL.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="primary"
-            disabled={isSeeding}
-            onClick={handleSeedMealsToSupabase}
-            className="gap-1.5"
-          >
-            <span>{isSeeding ? 'جاري الإدراج...' : 'حفظ الوجبات في Supabase الآن'}</span>
-          </Button>
-        </div>
-      )}
 
       {/* جدول إدارة الوجبات والتحكم الفوري */}
       <div className="p-6 sm:p-8 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-6">

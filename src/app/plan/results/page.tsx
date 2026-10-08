@@ -28,7 +28,6 @@ import { EngineResult, Meal, RecommendationOption } from '@/features/recommendat
 import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
-import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
 
 export default function ResultsStepPage() {
   const router = useRouter();
@@ -104,7 +103,7 @@ export default function ResultsStepPage() {
         let mealsToUse: Meal[] = [];
 
         if (error || !dbMeals || dbMeals.length === 0) {
-          mealsToUse = DEFAULT_MEALS;
+          mealsToUse = [];
         } else {
           mealsToUse = dbMeals.map((m: any) => ({
             id: m.id,

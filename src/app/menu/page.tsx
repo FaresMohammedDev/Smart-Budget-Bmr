@@ -18,7 +18,6 @@ import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
-import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
 import { Meal } from '@/features/recommendations/domain/types';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
@@ -34,7 +33,7 @@ export default function MenuEcommercePage() {
     getCartTotal,
   } = usePlannerStore();
 
-  const [meals, setMeals] = useState<Meal[]>(DEFAULT_MEALS);
+  const [meals, setMeals] = useState<Meal[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [ordering, setOrdering] = useState(false);
@@ -51,7 +50,7 @@ export default function MenuEcommercePage() {
           .eq('is_available', true);
 
         if (error || !data || data.length === 0) {
-          setMeals(DEFAULT_MEALS);
+          setMeals([]);
         } else {
           setMeals(
             data.map((m: any) => ({

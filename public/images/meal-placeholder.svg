@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b" />
+      <stop offset="100%" stop-color="#09090b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F37A20" />
+      <stop offset="100%" stop-color="#d96614" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bgGrad)" />
+  <circle cx="200" cy="130" r="64" fill="#27272a" />
+  <path d="M160 145 C160 115 240 115 240 145 Z" fill="url(#accentGrad)" />
+  <rect x="150" y="147" width="100" height="8" rx="4" fill="#F37A20" />
+  <circle cx="200" cy="112" r="7" fill="#F37A20" />
+  <path d="M168 165 Q200 175 232 165" stroke="#71717a" stroke-width="3" stroke-linecap="round" fill="none" />
+  <text x="200" y="220" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#f4f4f5">فتح الله ماركت</text>
+  <text x="200" y="242" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="400" fill="#a1a1aa">وجبة طازجة يومياً · Fresh Meal</text>
+</svg>

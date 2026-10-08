@@ -1,69 +1,309 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import {
+  Sparkles,
+  ShoppingBag,
+  ShieldCheck,
+  Flame,
+  Wallet,
+  Users,
+  LogIn,
+  ArrowLeft,
+  X,
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { usePlannerStore } from '@/features/planner/store/planner.store';
+import { createClient } from '@/lib/supabase/client';
+
+export default function WelcomePage() {
+  const router = useRouter();
+  const { setOrderMode, resetKiosk } = usePlannerStore();
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // بدء وضع السعرات والميزانية الذكية
+  const handleStartSmartBudget = async () => {
+    resetKiosk();
+    setOrderMode('smart_budget');
+    // ضمان وجود جلسة مجهولة سريعة للكيوسك (Anonymous Auth)
+    try {
+      const supabase = createClient();
+      await supabase.auth.signInAnonymously();
+    } catch {
+      // الاستمرار حتى لو كانت شبكة الكيوسك محلية
+    }
+    router.push('/plan/people');
+  };
+
+  // بدء وضع الطلب المباشر السريع (E-Commerce)
+  const handleStartQuickMenu = async () => {
+    resetKiosk();
+    setOrderMode('quick_menu');
+    try {
+      const supabase = createClient();
+      await supabase.auth.signInAnonymously();
+    } catch {
+      //
+    }
+    router.push('/menu');
+  };
+
+  // تسجيل دخول طاقم العمل (أدمن أو كاشير)
+  const handleStaffLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setLoginError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        setIsLoading(false);
+        return;
+      }
+
+      // التحقق من الرول وتوجيهه للشاشة المناسبة
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile?.role === 'admin') {
+        router.push('/admin');
+      } else if (profile?.role === 'cashier') {
+        router.push('/cashier');
+      } else {
+        router.push('/admin');
+      }
+    } catch (err: unknown) {
+      setLoginError(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل الدخول');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-zinc-950 text-white flex flex-col justify-between p-4 sm:p-8 relative overflow-hidden">
+      {/* خلفية جمالية بهوية فتح الله */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-[#F37A20]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-[#F37A20]/5 rounded-full blur-3xl pointer-events-none" />
+
+      {/* الرأس واللوجو الرسمي لفتح الله */}
+      <header className="flex items-center justify-between z-10">
+        <div className="flex items-center gap-3.5">
+          <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-black border border-zinc-800 p-1.5 shadow-2xl flex items-center justify-center">
+            <Image
+              src="/images/fathalla-logo.png"
+              alt="فتح الله ماركت"
+              width={56}
+              height={56}
+              priority
+              className="object-contain"
+            />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+              فتح الله ماركت
+            </h1>
+            <p className="text-xs sm:text-sm text-[#F37A20] font-bold">
+              قسم الوجبات الجاهزة والمطعم · Kiosk
+            </p>
+          </div>
+        </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowStaffModal(true)}
+          className="text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-700"
+        >
+          <ShieldCheck className="w-4 h-4 ml-1.5 text-[#F37A20]" />
+          دخول الإدارة / الكاشير
+        </Button>
+      </header>
+
+      {/* المحتوى الرئيسي للكيوسك */}
+      <div className="my-auto py-8 z-10 max-w-5xl mx-auto w-full text-center space-y-8">
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300">
+            <Sparkles className="w-4 h-4 text-[#F37A20]" />
+            <span>نظام Smart Budget الذكي لاقتراح الوجبات</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+            أهلاً بكم في مطعم <span className="text-[#F37A20]">فتح الله</span>
+          </h2>
+          <p className="text-sm sm:text-lg text-zinc-400 max-w-2xl mx-auto">
+            اختر الطريقة التي تفضلها للطلب: حساب ذكي بالسعرات والميزانية لتفادي الهدر، أو تصفح مباشر وسريع لقائمة الوجبات.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* بطاقتي الخيار للمستخدم */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-right max-w-4xl mx-auto">
+          {/* البطاقة 1: السعرات والميزانية الذكية */}
+          <div
+            onClick={handleStartSmartBudget}
+            className="group relative p-7 rounded-3xl bg-gradient-to-b from-zinc-900/90 to-zinc-950 border-2 border-zinc-800 hover:border-[#F37A20] transition-all duration-300 shadow-xl hover:shadow-[#F37A20]/15 cursor-pointer flex flex-col justify-between space-y-6"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <div className="space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-[#F37A20]/15 border border-[#F37A20]/30 flex items-center justify-center text-[#F37A20] group-hover:scale-110 transition-transform">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <div>
+                <div className="inline-block px-2.5 py-0.5 rounded bg-[#F37A20]/20 text-[#F37A20] text-xs font-bold mb-2">
+                  النظام الموصى به ⭐
+                </div>
+                <h3 className="text-2xl font-black text-white group-hover:text-[#F37A20] transition-colors">
+                  احسبها ذكية (Smart Budget)
+                </h3>
+                <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+                  أدخل بياناتك أو بيانات مجموعتك وميزانيتك، ونحسب لك السعرات بالمللي (BMR & TDEE) ونقترح لك الوجبة المثالية اللي تشبعك بدون هدر للأكل والفلوس.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 text-xs text-zinc-400 font-medium">
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  <Flame className="w-3.5 h-3.5 text-[#F37A20]" /> حرق السعرات BMR
+                </span>
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  <Wallet className="w-3.5 h-3.5 text-[#F37A20]" /> التزام بالميزانية
+                </span>
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  <Users className="w-3.5 h-3.5 text-[#F37A20]" /> نصيب كل فرد
+                </span>
+              </div>
+            </div>
+
+            <Button
+              size="lg"
+              className="w-full flex items-center justify-center gap-2 group-hover:bg-[#d96614]"
+            >
+              <span>ابدأ حساب الوجبة الذكية</span>
+              <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            </Button>
+          </div>
+
+          {/* البطاقة 2: الطلب السريع E-Commerce */}
+          <div
+            onClick={handleStartQuickMenu}
+            className="group relative p-7 rounded-3xl bg-gradient-to-b from-zinc-900/90 to-zinc-950 border-2 border-zinc-800 hover:border-zinc-600 transition-all duration-300 shadow-xl cursor-pointer flex flex-col justify-between space-y-6"
           >
-            Documentation
-          </a>
+            <div className="space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200 group-hover:scale-110 transition-transform">
+                <ShoppingBag className="w-7 h-7" />
+              </div>
+              <div>
+                <div className="inline-block px-2.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs font-bold mb-2">
+                  سريع ومباشر ⚡
+                </div>
+                <h3 className="text-2xl font-black text-white group-hover:text-zinc-200 transition-colors">
+                  الطلب المباشر السريع
+                </h3>
+                <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+                  مستعجل أو عارف طلبك؟ تصفح منيو الوجبات والساندوتشات والصواني بالأسعار وسعرات كل وجبة، أضف للسلة واطبع بون الكاشير مباشرة في ثوانٍ.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2 text-xs text-zinc-400 font-medium">
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  تصفح المنيو كامل
+                </span>
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  عرض السعرات لكل صنف
+                </span>
+                <span className="flex items-center gap-1 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  طباعة بون فوري
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <span>تصفح المنيو واطلب فوراً</span>
+              <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            </Button>
+          </div>
         </div>
-      </main>
-    </div>
+      </div>
+
+      {/* التذييل */}
+      <footer className="text-center text-xs text-zinc-500 z-10 py-3 border-t border-zinc-900">
+        فتح الله ماركت · شاشة الخدمة الذاتية (Kiosk) · جميع الحقوق محفوظة © {new Date().getFullYear()}
+      </footer>
+
+      {/* نافذة تسجيل دخول الطاقم (Modal) */}
+      {showStaffModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-2xl text-right">
+            <button
+              onClick={() => setShowStaffModal(false)}
+              className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-[#F37A20]/15 rounded-xl text-[#F37A20]">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">دخول الإدارة / الكاشير</h3>
+                <p className="text-xs text-zinc-400">خاص بطاقم عمل فتح الله ماركت</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleStaffLogin} className="space-y-4">
+              <Input
+                label="البريد الإلكتروني"
+                type="email"
+                placeholder="admin@fathalla.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+
+              <Input
+                label="كلمة المرور"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              {loginError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
+                  {loginError}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full mt-2"
+                size="lg"
+              >
+                {isLoading ? 'جاري التحقق...' : 'تسجيل الدخول'}
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }

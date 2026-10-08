@@ -34,6 +34,7 @@ export default function AdminDashboardPage() {
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingEditImage, setUploadingEditImage] = useState(false);
 
   // فورم إضافة وجبة جديدة
   const [newMeal, setNewMeal] = useState({
@@ -193,7 +194,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // رفع صورة وجبة إلى Supabase Storage
+  // رفع صورة وجبة جديدة
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -201,7 +202,7 @@ export default function AdminDashboardPage() {
     setUploadingImage(true);
     try {
       const supabase = createClient();
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || 'png';
       const fileName = `meal-${Date.now()}.${fileExt}`;
 
       const { data, error } = await supabase.storage
@@ -214,11 +215,70 @@ export default function AdminDashboardPage() {
           .getPublicUrl(fileName);
 
         setNewMeal((prev) => ({ ...prev, image_url: publicUrlData.publicUrl }));
+      } else {
+        // احتياطي Base64 إذا لم يكن الباكت مفعل في Supabase Storage
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            setNewMeal((prev) => ({ ...prev, image_url: reader.result as string }));
+          }
+        };
+        reader.readAsDataURL(file);
       }
     } catch {
-      //
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          setNewMeal((prev) => ({ ...prev, image_url: reader.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // رفع صورة أثناء تعديل وجبة موجودة
+  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingMeal) return;
+
+    setUploadingEditImage(true);
+    try {
+      const supabase = createClient();
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `meal-${Date.now()}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from('meal-images')
+        .upload(fileName, file, { upsert: true });
+
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage
+          .from('meal-images')
+          .getPublicUrl(fileName);
+
+        setEditingMeal((prev) => (prev ? { ...prev, image_url: publicUrlData.publicUrl } : null));
+      } else {
+        // احتياطي Base64
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            setEditingMeal((prev) => (prev ? { ...prev, image_url: reader.result as string } : null));
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          setEditingMeal((prev) => (prev ? { ...prev, image_url: reader.result as string } : null));
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingEditImage(false);
     }
   };
 
@@ -481,9 +541,10 @@ export default function AdminDashboardPage() {
                     <td className="py-3.5 flex items-center gap-3">
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
                         <Image
-                          src={meal.image_url}
+                          src={meal.image_url || '/images/fathalla-logo.png'}
                           alt={meal.name_ar}
                           fill
+                          unoptimized
                           className="object-cover"
                         />
                       </div>
@@ -650,9 +711,10 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
                     <Image
-                      src={newMeal.image_url}
+                      src={newMeal.image_url || '/images/fathalla-logo.png'}
                       alt="Preview"
                       fill
+                      unoptimized
                       className="object-cover"
                     />
                   </div>
@@ -667,6 +729,13 @@ export default function AdminDashboardPage() {
                     />
                   </label>
                 </div>
+                <Input
+                  label="أو رابط الصورة المباشر (URL)"
+                  type="text"
+                  placeholder="https://..."
+                  value={newMeal.image_url}
+                  onChange={(e) => setNewMeal({ ...newMeal, image_url: e.target.value })}
+                />
               </div>
 
               {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
@@ -778,6 +847,43 @@ export default function AdminDashboardPage() {
                   <option value="individual">فردي (وجبة لشخص)</option>
                   <option value="shareable">تشاركي (صواني عائلية)</option>
                 </select>
+              </div>
+
+              {/* تعديل أو رفع صورة الوجبة */}
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-zinc-300">
+                  صورة الوجبة (رفع صورة جديدة أو تغيير الرابط)
+                </label>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
+                    <Image
+                      src={editingMeal.image_url || '/images/fathalla-logo.png'}
+                      alt="Preview"
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  </div>
+                  <label className="flex-1 border-2 border-dashed border-zinc-700 hover:border-[#F37A20] rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-zinc-400 flex items-center justify-center gap-2">
+                    <Upload className="w-4 h-4 text-[#F37A20]" />
+                    <span>{uploadingEditImage ? 'جاري الرفع...' : 'رفع صورة جديدة من الجهاز'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <Input
+                  label="أو رابط الصورة المباشر (URL)"
+                  type="text"
+                  placeholder="https://..."
+                  value={editingMeal.image_url || ''}
+                  onChange={(e) =>
+                    setEditingMeal({ ...editingMeal, image_url: e.target.value })
+                  }
+                />
               </div>
 
               {/* تحديد ما إذا كانت أوشكت على الصلاحية */}

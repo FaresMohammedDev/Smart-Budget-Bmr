@@ -188,9 +188,10 @@ export default function MenuEcommercePage() {
                       <div className="space-y-3">
                         <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
                           <Image
-                            src={meal.image_url}
+                            src={meal.image_url || '/images/fathalla-logo.png'}
                             alt={meal.name_ar}
                             fill
+                            unoptimized
                             className="object-cover"
                           />
                           {meal.is_expiring_soon && (

@@ -53,7 +53,7 @@ export default function WelcomePage() {
     setOrderMode('smart_budget');
     try {
       const supabase = createClient();
-      await supabase.auth.signInAnonymously();
+      await supabase.auth.signOut();
     } catch {
       //
     }

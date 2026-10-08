@@ -357,9 +357,10 @@ export default function ResultsStepPage() {
                           <div key={iIdx} className="flex items-center gap-3">
                             <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
                               <Image
-                                src={item.meal.image_url}
+                                src={item.meal.image_url || '/images/fathalla-logo.png'}
                                 alt={item.meal.name_ar}
                                 fill
+                                unoptimized
                                 className="object-cover"
                               />
                             </div>

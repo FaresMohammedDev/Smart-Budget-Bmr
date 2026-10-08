@@ -107,6 +107,20 @@ export default function PeopleStepPage() {
     }
   };
 
+  // تسجيل الخروج والتحول إلى زائر
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setSavedGroups([]);
+      setSavedGroupId(null);
+      setStatusMessage('تم تسجيل الخروج بنجاح والمتابعة كزائر سريع.');
+    } catch {
+      //
+    }
+  };
+
   useEffect(() => {
     loadUserAndGroups();
   }, []);
@@ -363,16 +377,26 @@ export default function PeopleStepPage() {
         )}
 
         {/* قسم المجموعات المحفوظة (Saved Groups) للعملاء المسجلين */}
-        {currentUser && (
+        {currentUser ? (
           <div className="p-5 rounded-3xl bg-zinc-900 border border-zinc-800/80 space-y-3.5">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 text-sm font-bold text-white">
                 <Bookmark className="w-4 h-4 text-[#F37A20]" />
                 <span>مجموعاتك المحفوظة (Saved Groups):</span>
               </div>
-              <span className="text-xs text-zinc-400">
-                مرحباً بك {currentUser.user_metadata?.full_name || currentUser.email}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-400">
+                  مرحباً بك {currentUser.user_metadata?.full_name || currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-xs text-red-400 hover:text-red-300 underline font-medium cursor-pointer"
+                  title="تسجيل الخروج والمتابعة كزائر"
+                >
+                  تسجيل الخروج
+                </button>
+              </div>
             </div>
 
             {loadingGroups ? (
@@ -421,6 +445,23 @@ export default function PeopleStepPage() {
                 <span>لا توجد مجموعات محفوظة حتى الآن في حسابك. يمكنك إدخال الأفراد وحفظهم للزيارات القادمة!</span>
               </div>
             )}
+          </div>
+        ) : (
+          <div className="p-4 rounded-3xl bg-zinc-900/60 border border-zinc-800/80 text-xs text-zinc-400 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>أنت تتصفح كـ <strong className="text-zinc-200">زائر سريع (Guest)</strong>. بياناتك وحساباتك تعمل بالكامل بدون تسجيل.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('login');
+                setShowAuthModal(true);
+              }}
+              className="text-[#F37A20] hover:underline font-bold cursor-pointer"
+            >
+              تسجيل الدخول لحسابك لاسترجاع المجموعات ↗
+            </button>
           </div>
         )}
 

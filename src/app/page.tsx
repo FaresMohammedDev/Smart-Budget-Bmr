@@ -168,15 +168,9 @@ export default function WelcomePage() {
   };
 
   // بدء وضع الطلب المباشر السريع (E-Commerce)
-  const handleStartQuickMenu = async () => {
+  const handleStartQuickMenu = () => {
     resetKiosk();
     setOrderMode('quick_menu');
-    try {
-      const supabase = createClient();
-      await supabase.auth.signInAnonymously();
-    } catch {
-      //
-    }
     router.push('/menu');
   };
 

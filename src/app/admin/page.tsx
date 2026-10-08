@@ -286,18 +286,19 @@ export default function AdminDashboardPage() {
   const handleCreateMeal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const generatedNameEn = newMeal.name_en.trim() || `meal-${Date.now()}`;
       const supabase = createClient();
       const { data, error } = await supabase.from('meals').insert([
         {
-          name_ar: newMeal.name_ar,
-          name_en: newMeal.name_en || newMeal.name_ar,
-          price: newMeal.price,
-          discount_price: newMeal.discount_price,
-          is_expiring_soon: newMeal.is_expiring_soon,
+          name_ar: newMeal.name_ar.trim(),
+          name_en: generatedNameEn,
+          price: Number(newMeal.price),
+          discount_price: newMeal.discount_price ? Number(newMeal.discount_price) : null,
+          is_expiring_soon: Boolean(newMeal.is_expiring_soon),
           kind: newMeal.kind,
           portion_type: newMeal.portion_type,
-          total_kcal: newMeal.total_kcal,
-          image_url: newMeal.image_url,
+          total_kcal: Number(newMeal.total_kcal),
+          image_url: newMeal.image_url || '/images/fathalla-logo.png',
           is_available: true,
         },
       ]).select();
@@ -310,20 +311,31 @@ export default function AdminDashboardPage() {
           {
             id: `m-${Date.now()}`,
             name_ar: newMeal.name_ar,
-            name_en: newMeal.name_en,
-            price: newMeal.price,
-            discount_price: newMeal.discount_price,
-            is_expiring_soon: newMeal.is_expiring_soon,
+            name_en: generatedNameEn,
+            price: Number(newMeal.price),
+            discount_price: newMeal.discount_price ? Number(newMeal.discount_price) : null,
+            is_expiring_soon: Boolean(newMeal.is_expiring_soon),
             is_available: true,
-            total_kcal: newMeal.total_kcal,
+            total_kcal: Number(newMeal.total_kcal),
             kind: newMeal.kind,
             portion_type: newMeal.portion_type,
             servings: 1,
-            image_url: newMeal.image_url,
+            image_url: newMeal.image_url || '/images/fathalla-logo.png',
           },
           ...prev,
         ]);
       }
+      setNewMeal({
+        name_ar: '',
+        name_en: '',
+        price: 100,
+        discount_price: null,
+        is_expiring_soon: false,
+        kind: 'main',
+        portion_type: 'individual',
+        total_kcal: 500,
+        image_url: '',
+      });
       setShowAddModal(false);
     } catch {
       setShowAddModal(false);

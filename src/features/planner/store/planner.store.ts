@@ -40,6 +40,9 @@ interface PlannerState {
   updateCartQuantity: (mealId: string, quantity: number) => void;
   clearCart: () => void;
   getCartTotal: () => { totalPrice: number; totalKcal: number };
+  // معرف المجموعة المحفوظة المختارة
+  savedGroupId: string | null;
+  setSavedGroupId: (id: string | null) => void;
 
   // إعادة ضبط الكيوسك
   resetKiosk: () => void;
@@ -138,9 +141,13 @@ export const usePlannerStore = create<PlannerState>()(
         return { totalPrice, totalKcal };
       },
 
+      savedGroupId: null,
+      setSavedGroupId: (savedGroupId) => set({ savedGroupId }),
+
       resetKiosk: () =>
         set({
           orderMode: 'smart_budget',
+          savedGroupId: null,
           peopleCount: 1,
           people: [initialPerson],
           budget: 150,

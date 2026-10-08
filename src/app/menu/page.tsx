@@ -18,6 +18,7 @@ import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
+import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
 import { Meal } from '@/features/recommendations/domain/types';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
@@ -33,7 +34,7 @@ export default function MenuEcommercePage() {
     getCartTotal,
   } = usePlannerStore();
 
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [meals, setMeals] = useState<Meal[]>(DEFAULT_MEALS);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [ordering, setOrdering] = useState(false);
@@ -50,88 +51,7 @@ export default function MenuEcommercePage() {
           .eq('is_available', true);
 
         if (error || !data || data.length === 0) {
-          // بيانات احتياطية فورية
-          setMeals([
-            {
-              id: 'm1',
-              name_ar: 'ساندوتش شاورما فراخ',
-              name_en: 'Chicken Shawarma Sandwich',
-              price: 85,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 550,
-              kind: 'main',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm2',
-              name_ar: 'صينية مكرونة بشاميل عائلي',
-              name_en: 'Family Bechamel Pasta Tray',
-              price: 320,
-              discount_price: 260,
-              is_expiring_soon: true,
-              is_available: true,
-              total_kcal: 2800,
-              kind: 'main',
-              portion_type: 'shareable',
-              servings: 4,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm3',
-              name_ar: 'ربع فرخة مشوية بالأرز',
-              name_en: 'Quarter Grilled Chicken',
-              price: 160,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 850,
-              kind: 'main',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm4',
-              name_ar: 'بطاطس محمرة',
-              name_en: 'French Fries Box',
-              price: 35,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 400,
-              kind: 'side',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm5',
-              name_ar: 'سلطة خضراء',
-              name_en: 'Green Salad Plate',
-              price: 20,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 60,
-              kind: 'side',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm6',
-              name_ar: 'مشروب غازي',
-              name_en: 'Soft Drink Can',
-              price: 20,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 140,
-              kind: 'drink',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-          ]);
+          setMeals(DEFAULT_MEALS);
         } else {
           setMeals(
             data.map((m: any) => ({

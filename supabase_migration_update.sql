@@ -325,16 +325,127 @@ grant execute on function public.mark_order_as_paid(uuid) to authenticated;
 grant select on public.available_meals to anon, authenticated;
 
 -- ---------------------------------------------------------------------
--- 9) تحديث بعض الوجبات لتمييزها كعروض قرب انتهاء الصلاحية
+-- 9) تحديث سياسات قراءة الوجبات لتمكين الجميع والأدمن من رؤية الوجبات
 -- ---------------------------------------------------------------------
-update public.meals
-   set discount_price = 260, is_expiring_soon = true
- where name_en = 'Family Bechamel Pasta Tray';
+drop policy if exists "meals_select" on public.meals;
+create policy "meals_select" on public.meals
+  for select to anon, authenticated
+  using (true);
 
-update public.meals
-   set discount_price = 140, is_expiring_soon = true
- where name_en = 'Small Bechamel Pasta Tray';
+-- ---------------------------------------------------------------------
+-- 9.1) جداول وسياسات المجموعات المحفوظة (Saved Groups & Members)
+-- ---------------------------------------------------------------------
+create table if not exists public.saved_groups (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  name        text not null check (char_length(trim(name)) between 1 and 60),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  unique (user_id, name)
+);
 
-update public.meals
-   set discount_price = 220, is_expiring_soon = true
- where name_en = 'Half Grilled Chicken';
+create table if not exists public.group_members (
+  id              uuid primary key default gen_random_uuid(),
+  group_id        uuid not null references public.saved_groups (id) on delete cascade,
+  name            text not null check (char_length(trim(name)) between 1 and 60),
+  age             smallint not null check (age between 10 and 100),
+  gender          public.gender_type not null,
+  height_cm       numeric(5, 1) not null check (height_cm between 100 and 250),
+  weight_kg       numeric(5, 1) not null check (weight_kg between 25 and 300),
+  activity_level  public.activity_level not null,
+  sort_order      smallint not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+alter table public.saved_groups enable row level security;
+alter table public.group_members enable row level security;
+
+drop policy if exists "saved_groups_owner" on public.saved_groups;
+create policy "saved_groups_owner" on public.saved_groups
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+drop policy if exists "group_members_owner" on public.group_members;
+create policy "group_members_owner" on public.group_members
+  for all to authenticated
+  using (exists (
+    select 1 from public.saved_groups g
+    where g.id = group_id and g.user_id = (select auth.uid())
+  ))
+  with check (exists (
+    select 1 from public.saved_groups g
+    where g.id = group_id and g.user_id = (select auth.uid())
+  ));
+
+-- ---------------------------------------------------------------------
+-- 10) إدراج الأصناف والوجبات الأولية الأساسية في قاعدة البيانات (Seed Data)
+-- ---------------------------------------------------------------------
+insert into public.categories (name_ar, name_en, slug, sort_order) values
+  ('ساندوتشات',   'Sandwiches', 'sandwiches', 1),
+  ('صواني',       'Trays',      'trays',      2),
+  ('مشويات',      'Grills',     'grills',     3),
+  ('أطباق جانبية', 'Sides',      'sides',      4),
+  ('مشروبات',     'Drinks',     'drinks',     5)
+on conflict (slug) do nothing;
+
+insert into public.food_items (name_ar, name_en, unit, kcal_per_unit) values
+  ('عيش سوري',          'Syrian Bread',      'piece', 200),
+  ('عيش بلدي',          'Baladi Bread',      'piece', 250),
+  ('شاورما فراخ',       'Chicken Shawarma',  'g',     2.0),
+  ('كفتة مشوية',        'Grilled Kofta',     'g',     2.8),
+  ('كبدة إسكندراني',    'Alexandrian Liver', 'g',     1.7),
+  ('طعمية',             'Falafel',           'piece', 60),
+  ('فراخ مشوية',        'Grilled Chicken',   'g',     2.0),
+  ('أرز أبيض',          'White Rice',        'g',     1.3),
+  ('مكرونة قلم',        'Penne Pasta',       'g',     1.6),
+  ('صوص بشاميل',        'Bechamel Sauce',    'g',     1.4),
+  ('لحمة مفرومة',       'Minced Beef',       'g',     2.5),
+  ('جبنة موتزاريلا',    'Mozzarella',        'g',     3.0),
+  ('بطاطس محمرة',       'French Fries',      'g',     3.1),
+  ('سلطة خضراء',        'Green Salad',       'g',     0.2),
+  ('طحينة',             'Tahini Sauce',      'g',     3.0),
+  ('ثومية',             'Garlic Sauce',      'g',     4.5),
+  ('مخلل',              'Pickles',           'g',     0.1),
+  ('فول مدمس',          'Foul Medames',      'g',     1.1),
+  ('مياه معدنية',       'Mineral Water',     'piece', 0.01),
+  ('مشروب غازي',        'Soft Drink',        'piece', 140)
+on conflict (name_en) do nothing;
+
+insert into public.meals (category_id, name_ar, name_en, price, discount_price, is_expiring_soon, is_available, total_kcal, kind, portion_type, servings)
+select 
+  c.id, 
+  v.name_ar, 
+  v.name_en, 
+  v.price, 
+  v.disc_price, 
+  v.exp_soon, 
+  true, 
+  v.kcal, 
+  v.kind::public.meal_kind, 
+  v.portion::public.portion_type, 
+  v.servings
+from (values
+  ('sandwiches', 'ساندوتش شاورما فراخ',        'Chicken Shawarma Sandwich',   85,  null, false, 550,  'main',  'individual', 1),
+  ('sandwiches', 'ساندوتش كفتة',               'Kofta Sandwich',              95,  null, false, 620,  'main',  'individual', 1),
+  ('sandwiches', 'ساندوتش كبدة إسكندراني',     'Alexandrian Liver Sandwich',  60,  null, false, 480,  'main',  'individual', 1),
+  ('sandwiches', 'ساندوتش طعمية',              'Falafel Sandwich',            25,  null, false, 350,  'main',  'individual', 1),
+  ('trays',      'صينية مكرونة بشاميل عائلي',  'Family Bechamel Pasta Tray',  320, 260,  true,  2800, 'main',  'shareable',  4),
+  ('trays',      'صينية مكرونة بشاميل صغيرة',  'Small Bechamel Pasta Tray',   170, 140,  true,  1400, 'main',  'shareable',  2),
+  ('grills',     'ربع فرخة مشوية بالأرز',       'Quarter Grilled Chicken',     160, null, false, 850,  'main',  'individual', 1),
+  ('grills',     'نص فرخة مشوية بالأرز',        'Half Grilled Chicken',        260, 220,  true,  1310, 'main',  'individual', 1),
+  ('grills',     'صينية مشويات مشكلة عائلي',    'Family Mixed Grill Tray',     750, null, false, 3600, 'main',  'shareable',  5),
+  ('sides',      'بطاطس محمرة',                'French Fries Box',            35,  null, false, 400,  'side',  'individual', 1),
+  ('sides',      'سلطة خضراء',                 'Green Salad Plate',           20,  null, false, 80,   'side',  'individual', 1),
+  ('sides',      'سلطة طحينة',                 'Tahini Salad Plate',          20,  null, false, 150,  'side',  'individual', 1),
+  ('sides',      'طبق فول بالعيش',             'Foul Plate with Bread',       25,  null, false, 380,  'side',  'individual', 1),
+  ('drinks',     'مياه معدنية',                'Mineral Water Bottle',        10,  null, false, 0,    'drink', 'individual', 1),
+  ('drinks',     'مشروب غازي',                 'Soft Drink Can',              20,  null, false, 140,  'drink', 'individual', 1)
+) as v(cat, name_ar, name_en, price, disc_price, exp_soon, kcal, kind, portion, servings)
+join public.categories c on c.slug = v.cat
+on conflict (name_en) do update set
+  price = excluded.price,
+  discount_price = excluded.discount_price,
+  is_expiring_soon = excluded.is_expiring_soon,
+  total_kcal = excluded.total_kcal,
+  is_available = true;

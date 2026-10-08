@@ -26,10 +26,14 @@ import { formatEgp, formatKcal } from '@/lib/format';
 import { Meal } from '@/features/recommendations/domain/types';
 import { createClient } from '@/lib/supabase/client';
 
+import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
+
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [meals, setMeals] = useState<Meal[]>(DEFAULT_MEALS);
   const [loading, setLoading] = useState(true);
+  const [isFromSupabase, setIsFromSupabase] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -48,32 +52,35 @@ export default function AdminDashboardPage() {
     image_url: '/images/meal-placeholder.svg',
   });
 
-  // إحصائيات سريعة
-  const [stats, setStats] = useState({
-    totalOrders: 142,
-    totalRevenue: 28450,
-    paidOrders: 135,
-    topSelling: [
-      { name: 'ساندوتش شاورما فراخ', sales: 64, revenue: 5440 },
-      { name: 'صينية مكرونة بشاميل عائلي', sales: 38, revenue: 9880 },
-      { name: 'ربع فرخة مشوية بالأرز', sales: 29, revenue: 4640 },
-      { name: 'بطاطس محمرة', sales: 52, revenue: 1820 },
-    ],
+  // إحصائيات حية حقيقية محسوبة من الطلبات الفعلية
+  const [stats, setStats] = useState<{
+    totalOrders: number;
+    totalRevenue: number;
+    paidOrders: number;
+    topSelling: { name: string; sales: number; revenue: number }[];
+  }>({
+    totalOrders: 0,
+    totalRevenue: 0,
+    paidOrders: 0,
+    topSelling: [],
   });
 
-  // جلب الوجبات
-  const loadAdminMeals = async () => {
+  // جلب الوجبات والإحصائيات الحية
+  const loadAdminData = async () => {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
+
+      // 1. جلب الوجبات من جدول meals
+      const { data: mealsData, error: mealsErr } = await supabase
         .from('meals')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!mealsErr && mealsData && mealsData.length > 0) {
+        setIsFromSupabase(true);
         setMeals(
-          data.map((m: any) => ({
+          mealsData.map((m: any) => ({
             id: m.id,
             name_ar: m.name_ar,
             name_en: m.name_en,
@@ -89,60 +96,104 @@ export default function AdminDashboardPage() {
           }))
         );
       } else {
-        // بيانات تجريبية في حالة عدم اتصال السيرفر
-        setMeals([
-          {
-            id: 'm1',
-            name_ar: 'ساندوتش شاورما فراخ',
-            name_en: 'Chicken Shawarma Sandwich',
-            price: 85,
-            is_expiring_soon: false,
-            is_available: true,
-            total_kcal: 550,
-            kind: 'main',
-            portion_type: 'individual',
-            servings: 1,
-            image_url: '/images/meal-placeholder.svg',
-          },
-          {
-            id: 'm2',
-            name_ar: 'صينية مكرونة بشاميل عائلي',
-            name_en: 'Family Bechamel Pasta Tray',
-            price: 320,
-            discount_price: 260,
-            is_expiring_soon: true,
-            is_available: true,
-            total_kcal: 2800,
-            kind: 'main',
-            portion_type: 'shareable',
-            servings: 4,
-            image_url: '/images/meal-placeholder.svg',
-          },
-          {
-            id: 'm3',
-            name_ar: 'ربع فرخة مشوية بالأرز',
-            name_en: 'Quarter Grilled Chicken',
-            price: 160,
-            is_expiring_soon: false,
-            is_available: false, // غير متاح
-            total_kcal: 850,
-            kind: 'main',
-            portion_type: 'individual',
-            servings: 1,
-            image_url: '/images/meal-placeholder.svg',
-          },
-        ]);
+        setIsFromSupabase(false);
+        setMeals(DEFAULT_MEALS);
+      }
+
+      // 2. جلب الطلبات الفعلية لحساب الإحصائيات الحية الدقيقة
+      const { data: ordersData } = await supabase
+        .from('orders')
+        .select('id, status, total_price, created_at');
+
+      const { data: itemsData } = await supabase
+        .from('order_items')
+        .select('meal_name_ar, quantity, unit_price');
+
+      if (ordersData && ordersData.length > 0) {
+        const total = ordersData.length;
+        const paidList = ordersData.filter((o: any) => o.status === 'paid');
+        const paidCount = paidList.length;
+        const revenue = paidList.reduce(
+          (sum: number, o: any) => sum + Number(o.total_price || 0),
+          0
+        );
+
+        // تجميع أكثر الوجبات مبيعاً بناءً على عناصر الطلبات الفعلية
+        const salesMap: Record<string, { sales: number; revenue: number }> = {};
+        if (itemsData && itemsData.length > 0) {
+          itemsData.forEach((item: any) => {
+            const name = item.meal_name_ar || 'وجبة';
+            const qty = Number(item.quantity || 1);
+            const price = Number(item.unit_price || 0);
+            if (!salesMap[name]) {
+              salesMap[name] = { sales: 0, revenue: 0 };
+            }
+            salesMap[name].sales += qty;
+            salesMap[name].revenue += qty * price;
+          });
+        }
+
+        const topSellingList = Object.entries(salesMap)
+          .map(([name, d]) => ({ name, sales: d.sales, revenue: d.revenue }))
+          .sort((a, b) => b.sales - a.sales)
+          .slice(0, 4);
+
+        setStats({
+          totalOrders: total,
+          totalRevenue: revenue,
+          paidOrders: paidCount,
+          topSelling: topSellingList,
+        });
+      } else {
+        setStats({
+          totalOrders: 0,
+          totalRevenue: 0,
+          paidOrders: 0,
+          topSelling: [],
+        });
       }
     } catch {
-      //
+      setMeals(DEFAULT_MEALS);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAdminMeals();
+    loadAdminData();
   }, []);
+
+  // إدراج وجبات فتح الله الافتراضية (15 وجبة) في Supabase بنقرة واحدة
+  const handleSeedMealsToSupabase = async () => {
+    setIsSeeding(true);
+    try {
+      const supabase = createClient();
+      for (const meal of DEFAULT_MEALS) {
+        await supabase.from('meals').upsert(
+          {
+            name_ar: meal.name_ar,
+            name_en: meal.name_en,
+            price: meal.price,
+            discount_price: meal.discount_price,
+            is_expiring_soon: meal.is_expiring_soon,
+            is_available: true,
+            total_kcal: meal.total_kcal,
+            kind: meal.kind,
+            portion_type: meal.portion_type,
+            servings: meal.servings,
+            image_url: meal.image_url,
+          },
+          { onConflict: 'name_en' }
+        );
+      }
+      await loadAdminData();
+      alert('تم إدراج وجبات فتح الله (15 وجبة) بنجاح في قاعدة بيانات Supabase!');
+    } catch (err: unknown) {
+      alert(`حدث خطأ أثناء إدراج الوجبات: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   // تبديل التوافر (Toggle Availability)
   const handleToggleAvailability = async (mealId: string, currentStatus: boolean) => {
@@ -230,7 +281,7 @@ export default function AdminDashboardPage() {
       ]).select();
 
       if (!error && data) {
-        await loadAdminMeals();
+        await loadAdminData();
       } else {
         // إضافة محلية
         setMeals((prev) => [
@@ -280,7 +331,7 @@ export default function AdminDashboardPage() {
         .eq('id', editingMeal.id);
 
       if (!error) {
-        await loadAdminMeals();
+        await loadAdminData();
       } else {
         // تحديث محلي
         setMeals((prev) =>
@@ -335,10 +386,23 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={loadAdminMeals}>
+          <Button variant="ghost" size="sm" onClick={loadAdminData}>
             <RotateCcw className="w-4 h-4 ml-1.5" />
             تحديث
           </Button>
+
+          {!isFromSupabase && (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={isSeeding}
+              onClick={handleSeedMealsToSupabase}
+              className="gap-1.5"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>{isSeeding ? 'جاري الإدراج...' : 'إدراج الوجبات (15) في Supabase'}</span>
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -360,7 +424,9 @@ export default function AdminDashboardPage() {
             <ShoppingBag className="w-4 h-4 text-[#F37A20]" />
           </div>
           <div className="text-2xl font-black text-white">{stats.totalOrders} طلب</div>
-          <div className="text-[11px] text-emerald-400">منها {stats.paidOrders} مكتمل ومدفوع</div>
+          <div className="text-[11px] text-emerald-400">
+            {stats.paidOrders > 0 ? `منها ${stats.paidOrders} مكتمل ومدفوع` : 'لا توجد طلبات مدفوعة بعد'}
+          </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
@@ -369,7 +435,9 @@ export default function AdminDashboardPage() {
             <DollarSign className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-black text-white">{formatEgp(stats.totalRevenue)}</div>
-          <div className="text-[11px] text-zinc-400">متوسط الطلب: {formatEgp(Math.round(stats.totalRevenue / stats.totalOrders))}</div>
+          <div className="text-[11px] text-zinc-400">
+            متوسط الطلب: {stats.totalOrders > 0 ? formatEgp(Math.round(stats.totalRevenue / stats.totalOrders)) : '0 ج.م'}
+          </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
@@ -404,21 +472,53 @@ export default function AdminDashboardPage() {
           <span>الأكثر طلباً ومبيعاً (Top Selling):</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {stats.topSelling.map((ts, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs"
-            >
-              <div>
-                <div className="font-bold text-white">{ts.name}</div>
-                <div className="text-zinc-400 mt-0.5">{ts.sales} وجبة بيعت</div>
+        {stats.topSelling.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {stats.topSelling.map((ts, idx) => (
+              <div
+                key={idx}
+                className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs"
+              >
+                <div>
+                  <div className="font-bold text-white">{ts.name}</div>
+                  <div className="text-zinc-400 mt-0.5">{ts.sales} وجبة بيعت</div>
+                </div>
+                <div className="text-emerald-400 font-black">{formatEgp(ts.revenue)}</div>
               </div>
-              <div className="text-emerald-400 font-black">{formatEgp(ts.revenue)}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 rounded-2xl bg-zinc-950/60 border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
+            لا توجد مبيعات مسجلة حتى الآن — يتم حساب الوجبات الأكثر مبيعاً والأعلى إيراداً تلقائياً بمجرد إتمام الطلبات في الكاشير.
+          </div>
+        )}
       </div>
+
+      {/* تنبيه إذا لم تكن الوجبات موجودة في Supabase بعد */}
+      {!isFromSupabase && (
+        <div className="p-4 rounded-2xl bg-[#F37A20]/10 border border-[#F37A20]/30 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-[#F37A20] shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-white">
+                تم تحميل وجبات فتح الله الافتراضية (15 وجبة كاملة)
+              </p>
+              <p className="text-xs text-zinc-400">
+                يمكنك إدراجها فوراً بنقرة واحدة في جدول meals بقاعدة بيانات Supabase، أو تشغيل سكريبت SQL.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={isSeeding}
+            onClick={handleSeedMealsToSupabase}
+            className="gap-1.5"
+          >
+            <span>{isSeeding ? 'جاري الإدراج...' : 'حفظ الوجبات في Supabase الآن'}</span>
+          </Button>
+        </div>
+      )}
 
       {/* جدول إدارة الوجبات والتحكم الفوري */}
       <div className="p-6 sm:p-8 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-6">

@@ -28,6 +28,7 @@ import { EngineResult, Meal, RecommendationOption } from '@/features/recommendat
 import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
+import { DEFAULT_MEALS } from '@/features/recommendations/data/defaultMeals';
 
 export default function ResultsStepPage() {
   const router = useRouter();
@@ -35,6 +36,7 @@ export default function ResultsStepPage() {
     people,
     budget,
     mealTime,
+    savedGroupId,
     setSelectedRecommendation,
     setSelectedShares,
   } = usePlannerStore();
@@ -102,74 +104,7 @@ export default function ResultsStepPage() {
         let mealsToUse: Meal[] = [];
 
         if (error || !dbMeals || dbMeals.length === 0) {
-          mealsToUse = [
-            {
-              id: 'm1',
-              name_ar: 'ساندوتش شاورما فراخ',
-              name_en: 'Chicken Shawarma Sandwich',
-              price: 85,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 550,
-              kind: 'main',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm2',
-              name_ar: 'صينية مكرونة بشاميل عائلي',
-              name_en: 'Family Bechamel Pasta Tray',
-              price: 320,
-              discount_price: 260,
-              is_expiring_soon: true,
-              is_available: true,
-              total_kcal: 2800,
-              kind: 'main',
-              portion_type: 'shareable',
-              servings: 4,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm3',
-              name_ar: 'ربع فرخة مشوية بالأرز',
-              name_en: 'Quarter Grilled Chicken',
-              price: 160,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 850,
-              kind: 'main',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm4',
-              name_ar: 'بطاطس محمرة',
-              name_en: 'French Fries Box',
-              price: 35,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 400,
-              kind: 'side',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-            {
-              id: 'm5',
-              name_ar: 'سلطة خضراء',
-              name_en: 'Green Salad Plate',
-              price: 20,
-              is_expiring_soon: false,
-              is_available: true,
-              total_kcal: 60,
-              kind: 'side',
-              portion_type: 'individual',
-              servings: 1,
-              image_url: '/images/meal-placeholder.svg',
-            },
-          ];
+          mealsToUse = DEFAULT_MEALS;
         } else {
           mealsToUse = dbMeals.map((m: any) => ({
             id: m.id,
@@ -247,6 +182,7 @@ export default function ResultsStepPage() {
       const { data: orderId, error: rpcError } = await supabase.rpc('create_order', {
         p_payload: {
           budget,
+          group_id: savedGroupId || undefined,
           meal_fraction: 0.4,
           order_mode: 'smart_budget',
           items: itemsPayload,

@@ -12,6 +12,7 @@ import {
   Users,
   LogIn,
   ArrowLeft,
+  ArrowRight,
   X,
   KeyRound,
   UserCheck,
@@ -30,8 +31,24 @@ export default function WelcomePage() {
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // بدء وضع السعرات والميزانية الذكية
-  const handleStartSmartBudget = async () => {
+  // مودال اختيار طريقة المتابعة (زائر أو تسجيل دخول / حساب جديد)
+  const [showAuthChoiceModal, setShowAuthChoiceModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'choice' | 'login' | 'register'>('choice');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPassword, setCustomerPassword] = useState('');
+  const [customerFullName, setCustomerFullName] = useState('');
+  const [customerError, setCustomerError] = useState('');
+  const [customerLoading, setCustomerLoading] = useState(false);
+
+  // فتح نافذة الاختيار عند الضغط على "احسبها ذكية"
+  const handleOpenSmartBudgetChoice = () => {
+    setAuthMode('choice');
+    setCustomerError('');
+    setShowAuthChoiceModal(true);
+  };
+
+  // المتابعة كزائر (Guest)
+  const handleContinueAsGuest = async () => {
     resetKiosk();
     setOrderMode('smart_budget');
     try {
@@ -40,7 +57,103 @@ export default function WelcomePage() {
     } catch {
       //
     }
+    setShowAuthChoiceModal(false);
     router.push('/plan/people');
+  };
+
+  // تسجيل دخول العميل
+  const handleCustomerLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomerError('');
+    setCustomerLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: customerEmail,
+        password: customerPassword,
+      });
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          setCustomerError('البريد أو كلمة المرور غير صحيحة. إذا لم يكن لديك حساب، يمكنك الضغط على "إنشاء حساب جديد".');
+        } else {
+          setCustomerError(error.message);
+        }
+        setCustomerLoading(false);
+        return;
+      }
+
+      if (data?.user) {
+        resetKiosk();
+        setOrderMode('smart_budget');
+        setShowAuthChoiceModal(false);
+        router.push('/plan/people');
+      }
+    } catch (err: unknown) {
+      setCustomerError(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل الدخول');
+    } finally {
+      setCustomerLoading(false);
+    }
+  };
+
+  // إنشاء حساب عميل جديد
+  const handleCustomerRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomerError('');
+
+    if (!customerFullName.trim()) {
+      setCustomerError('يرجى إدخال اسمك بالكامل');
+      return;
+    }
+    if (customerPassword.length < 6) {
+      setCustomerError('كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل');
+      return;
+    }
+
+    setCustomerLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: customerEmail,
+        password: customerPassword,
+        options: {
+          data: {
+            full_name: customerFullName,
+          },
+        },
+      });
+
+      if (error) {
+        setCustomerError(error.message);
+        setCustomerLoading(false);
+        return;
+      }
+
+      if (data?.user) {
+        // إنشاء بروفايل في جدول profiles
+        try {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            email: customerEmail,
+            full_name: customerFullName,
+            role: 'customer',
+          });
+        } catch {
+          //
+        }
+
+        resetKiosk();
+        setOrderMode('smart_budget');
+        setShowAuthChoiceModal(false);
+        router.push('/plan/people');
+      }
+    } catch (err: unknown) {
+      setCustomerError(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الحساب');
+    } finally {
+      setCustomerLoading(false);
+    }
   };
 
   // بدء وضع الطلب المباشر السريع (E-Commerce)
@@ -211,7 +324,7 @@ export default function WelcomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-right max-w-4xl mx-auto">
           {/* البطاقة 1: السعرات والميزانية الذكية */}
           <div
-            onClick={handleStartSmartBudget}
+            onClick={handleOpenSmartBudgetChoice}
             className="group relative p-7 rounded-3xl bg-gradient-to-b from-zinc-900/90 to-zinc-950 border-2 border-zinc-800 hover:border-[#F37A20] transition-all duration-300 shadow-xl hover:shadow-[#F37A20]/15 cursor-pointer flex flex-col justify-between space-y-6"
           >
             <div className="space-y-4">
@@ -389,6 +502,269 @@ export default function WelcomePage() {
                 {isLoading ? 'جاري التحقق...' : 'تسجيل الدخول'}
               </Button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة خيار الدخول كزائر أو تسجيل حساب (Customer Auth Choice) */}
+      {showAuthChoiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right space-y-6">
+            <button
+              onClick={() => setShowAuthChoiceModal(false)}
+              className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* وضع الاختيار الأولي (Choice) */}
+            {authMode === 'choice' && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-[#F37A20]/15 rounded-2xl text-[#F37A20]">
+                    <Sparkles className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">طريقة المتابعة في Smart Budget</h3>
+                    <p className="text-xs text-zinc-400">اختر الطريقة الأنسب لك لبدء حساب وجبتك</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5">
+                  {/* خيار 1: زائر */}
+                  <div
+                    onClick={handleContinueAsGuest}
+                    className="p-5 rounded-2xl bg-zinc-950 border-2 border-zinc-800 hover:border-[#F37A20] transition-all cursor-pointer group space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white group-hover:text-[#F37A20] transition-colors">
+                        المتابعة كزائر (Guest) 🚀
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-semibold">
+                        سريع وفوري
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      حساب فوري للسعرات والميزانية بدون أي تسجيل مسبق، وطباعة بون الكاشير مباشرة عند الانتهاء.
+                    </p>
+                    <div className="pt-1 flex items-center gap-1.5 text-xs text-[#F37A20] font-bold">
+                      <span>متابعة كزائر الآن</span>
+                      <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+
+                  {/* خيار 2: تسجيل الدخول أو إنشاء حساب */}
+                  <div
+                    onClick={() => {
+                      setCustomerError('');
+                      setAuthMode('login');
+                    }}
+                    className="p-5 rounded-2xl bg-gradient-to-b from-[#F37A20]/10 to-zinc-950 border-2 border-[#F37A20]/40 hover:border-[#F37A20] transition-all cursor-pointer group space-y-2 shadow-lg shadow-[#F37A20]/5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white group-hover:text-[#F37A20] transition-colors">
+                        تسجيل الدخول / إنشاء حساب 👤
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[#F37A20] text-black font-black">
+                        موصى به ⭐
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      احفظ مجموعاتك وعائلتك (مثل: عائلتي، شلة النادي) واسترجع بياناتهم بنقرة واحدة في أي زيارة قادمة لفتح الله بدون إعادة إدخالها!
+                    </p>
+                    <div className="pt-1 flex items-center gap-1.5 text-xs text-[#F37A20] font-bold">
+                      <span>تسجيل الدخول أو فتح حساب جديد</span>
+                      <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* وضع تسجيل الدخول أو إنشاء الحساب (Login / Register) */}
+            {(authMode === 'login' || authMode === 'register') && (
+              <div className="space-y-5">
+                {/* الرأس وأزرار التبديل */}
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('choice')}
+                      className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                      <span>رجوع للخيارات</span>
+                    </button>
+                  </div>
+
+                  <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('login');
+                        setCustomerError('');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                        authMode === 'login'
+                          ? 'bg-[#F37A20] text-white shadow'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      تسجيل الدخول
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('register');
+                        setCustomerError('');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                        authMode === 'register'
+                          ? 'bg-[#F37A20] text-white shadow'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      حساب جديد
+                    </button>
+                  </div>
+                </div>
+
+                {authMode === 'login' ? (
+                  <form onSubmit={handleCustomerLogin} className="space-y-4">
+                    <div>
+                      <h4 className="text-lg font-bold text-white">تسجيل الدخول</h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        أدخل بريدك وكلمة المرور للوصول لمجموعاتك المحفوظة
+                      </p>
+                    </div>
+
+                    <Input
+                      label="البريد الإلكتروني"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      required
+                    />
+
+                    <Input
+                      label="كلمة المرور"
+                      type="password"
+                      placeholder="••••••••"
+                      value={customerPassword}
+                      onChange={(e) => setCustomerPassword(e.target.value)}
+                      required
+                    />
+
+                    {customerError && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold leading-relaxed">
+                        {customerError}
+                      </div>
+                    )}
+
+                    <Button
+                      type="submit"
+                      disabled={customerLoading}
+                      className="w-full mt-2"
+                      size="lg"
+                    >
+                      {customerLoading ? 'جاري التحقق...' : 'دخول ومتابعة'}
+                    </Button>
+
+                    <div className="pt-2 flex items-center justify-between text-xs text-zinc-400">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('register');
+                          setCustomerError('');
+                        }}
+                        className="hover:text-[#F37A20] underline cursor-pointer"
+                      >
+                        ليس لديك حساب؟ أنشئ حسابك الآن
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleContinueAsGuest}
+                        className="hover:text-white cursor-pointer"
+                      >
+                        المتابعة كزائر سريع ⚡
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleCustomerRegister} className="space-y-4">
+                    <div>
+                      <h4 className="text-lg font-bold text-white">إنشاء حساب جديد</h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        أنشئ حسابك لحفظ مجموعاتك العائلية وطلباتك القادمة
+                      </p>
+                    </div>
+
+                    <Input
+                      label="الاسم بالكامل"
+                      type="text"
+                      placeholder="مثال: أحمد محمد"
+                      value={customerFullName}
+                      onChange={(e) => setCustomerFullName(e.target.value)}
+                      required
+                    />
+
+                    <Input
+                      label="البريد الإلكتروني"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      required
+                    />
+
+                    <Input
+                      label="كلمة المرور (6 خانات على الأقل)"
+                      type="password"
+                      placeholder="••••••••"
+                      value={customerPassword}
+                      onChange={(e) => setCustomerPassword(e.target.value)}
+                      required
+                    />
+
+                    {customerError && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold leading-relaxed">
+                        {customerError}
+                      </div>
+                    )}
+
+                    <Button
+                      type="submit"
+                      disabled={customerLoading}
+                      className="w-full mt-2"
+                      size="lg"
+                    >
+                      {customerLoading ? 'جاري إنشاء الحساب...' : 'إنشاء الحساب ومتابعة'}
+                    </Button>
+
+                    <div className="pt-2 flex items-center justify-between text-xs text-zinc-400">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setCustomerError('');
+                        }}
+                        className="hover:text-[#F37A20] underline cursor-pointer"
+                      >
+                        لديك حساب بالفعل؟ سجل الدخول
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleContinueAsGuest}
+                        className="hover:text-white cursor-pointer"
+                      >
+                        المتابعة كزائر سريع ⚡
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

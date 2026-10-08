@@ -23,6 +23,7 @@ import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
 import { calculateTargetMealKcal } from '@/features/nutrition/domain/meal-fraction';
 import { recommendMeals } from '@/features/recommendations/domain/engine';
+import { calculateGroupShares } from '@/features/recommendations/domain/shares';
 import { EngineResult, Meal, RecommendationOption } from '@/features/recommendations/domain/types';
 import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { formatEgp, formatKcal } from '@/lib/format';
@@ -30,7 +31,14 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function ResultsStepPage() {
   const router = useRouter();
-  const { people, budget, mealTime, setSelectedRecommendation } = usePlannerStore();
+  const {
+    people,
+    budget,
+    mealTime,
+    setSelectedRecommendation,
+    setSelectedShares,
+  } = usePlannerStore();
+
   const [engineResult, setEngineResult] = useState<EngineResult | null>(null);
   const [selectedOpt, setSelectedOpt] = useState<RecommendationOption | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +73,21 @@ export default function ResultsStepPage() {
   const totalTdee = peopleNutrition.reduce((sum, p) => sum + p.tdee, 0);
   const targetKcal = calculateTargetMealKcal(totalTdee, mealTime);
 
+  // حساب الحصص ديناميكياً للوجبة المختارة حالياً
+  const currentShares = selectedOpt && peopleNutrition.length > 0
+    ? calculateGroupShares(peopleNutrition, selectedOpt.items)
+    : [];
+
+  // دالة اختيار الوجبة وتحديث الحصص في الـ State
+  const handleSelectMeal = (rec: RecommendationOption) => {
+    setSelectedOpt(rec);
+    setSelectedRecommendation(rec);
+    if (peopleNutrition.length > 0) {
+      const updatedShares = calculateGroupShares(peopleNutrition, rec.items);
+      setSelectedShares(updatedShares);
+    }
+  };
+
   // 2. جلب الوجبات وتشغيل المحرك
   useEffect(() => {
     async function fetchAndRecommend() {
@@ -79,7 +102,6 @@ export default function ResultsStepPage() {
         let mealsToUse: Meal[] = [];
 
         if (error || !dbMeals || dbMeals.length === 0) {
-          // بيانات احتياطية مطابقة للسيد
           mealsToUse = [
             {
               id: 'm1',
@@ -100,7 +122,7 @@ export default function ResultsStepPage() {
               name_en: 'Family Bechamel Pasta Tray',
               price: 320,
               discount_price: 260,
-              is_expiring_soon: true, // عرض توفير خاص قرب الصلاحية
+              is_expiring_soon: true,
               is_available: true,
               total_kcal: 2800,
               kind: 'main',
@@ -176,7 +198,13 @@ export default function ResultsStepPage() {
 
         setEngineResult(res);
         if (res.status === 'success' && res.recommendations.length > 0) {
-          setSelectedOpt(res.recommendations[0]!);
+          const firstRec = res.recommendations[0]!;
+          setSelectedOpt(firstRec);
+          setSelectedRecommendation(firstRec);
+          if (peopleNutrition.length > 0) {
+            const initialShares = calculateGroupShares(peopleNutrition, firstRec.items);
+            setSelectedShares(initialShares);
+          }
         }
       } catch (err: unknown) {
         setErrorMsg('حدث خطأ في جلب الوجبات');
@@ -196,15 +224,13 @@ export default function ResultsStepPage() {
 
     try {
       const supabase = createClient();
-      const userRes = await supabase.auth.getUser();
 
       const itemsPayload = selectedOpt.items.map((i) => ({
         meal_id: i.meal.id,
         quantity: i.quantity,
       }));
 
-      const shares = engineResult?.status === 'success' ? engineResult.sharesByPerson : undefined;
-
+      // الحصص الدقيقة المحسوبة للوجبة المختارة حالياً
       const peoplePayload = people.map((p, idx) => ({
         name: p.name || `فرد ${idx + 1}`,
         age: p.age,
@@ -212,9 +238,9 @@ export default function ResultsStepPage() {
         height_cm: p.heightCm,
         weight_kg: p.weightKg,
         activity_level: p.activityLevel,
-        share_percent: shares?.[idx]?.sharePercent ?? 100 / people.length,
-        share_kcal: shares?.[idx]?.shareKcal ?? 0,
-        share_details: shares?.[idx]?.allocatedItems ?? [],
+        share_percent: currentShares[idx]?.sharePercent ?? Math.round(100 / people.length),
+        share_kcal: currentShares[idx]?.shareKcal ?? 0,
+        share_details: currentShares[idx]?.allocatedItems ?? [],
       }));
 
       // استدعاء دالة create_order الآمنة في Supabase
@@ -233,11 +259,13 @@ export default function ResultsStepPage() {
       }
 
       setSelectedRecommendation(selectedOpt);
+      setSelectedShares(currentShares);
       router.push(`/receipt/${orderId}`);
     } catch (err: unknown) {
-      // إذا فشل الـ RPC لعدم وجود ربط مباشر بقاعدة البيانات، ننشئ كود وهمي ونعرض البون للمعاينة
+      // احتياطي فوري لتوليد البون والمعاينة بسلاسة
       const fallbackOrderId = `ord-${Date.now()}`;
       setSelectedRecommendation(selectedOpt);
+      setSelectedShares(currentShares);
       router.push(`/receipt/${fallbackOrderId}`);
     } finally {
       setOrdering(false);
@@ -355,94 +383,101 @@ export default function ResultsStepPage() {
               </div>
             </div>
 
-            {/* قائمة كروت الترشيحات */}
+            {/* قائمة كروت الترشيحات - اختيار الوجبة يغير التقسيم فورياً */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {engineResult?.status === 'success' && engineResult.recommendations.map((rec) => {
-                const isSelected = selectedOpt?.id === rec.id;
-                return (
-                  <div
-                    key={rec.id}
-                    onClick={() => setSelectedOpt(rec)}
-                    className={`relative p-6 rounded-3xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 ${
-                      isSelected
-                        ? 'bg-zinc-900 border-[#F37A20] shadow-xl shadow-[#F37A20]/15'
-                        : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
-                    }`}
-                  >
-                    {/* شارة التميز */}
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant={rec.isExpiringSoonOffer ? 'special' : 'default'}
-                      >
-                        {rec.title_ar}
-                      </Badge>
-                      <div
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          isSelected
-                            ? 'bg-[#F37A20] border-[#F37A20] text-black'
-                            : 'border-zinc-700'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
-                      </div>
-                    </div>
-
-                    {/* تفاصيل الوجبات في هذا الاقتراح */}
-                    <div className="space-y-3">
-                      {rec.items.map((item, iIdx) => (
-                        <div key={iIdx} className="flex items-center gap-3">
-                          <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
-                            <Image
-                              src={item.meal.image_url}
-                              alt={item.meal.name_ar}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-bold text-white text-base">
-                              {item.quantity} × {item.meal.name_ar}
-                            </div>
-                            <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
-                              <span>{formatKcal(item.meal.total_kcal * item.quantity)}</span>
-                              <span>•</span>
-                              <span>{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
-                            </div>
-                          </div>
+              {engineResult?.status === 'success' &&
+                engineResult.recommendations.map((rec) => {
+                  const isSelected = selectedOpt?.id === rec.id;
+                  return (
+                    <div
+                      key={rec.id}
+                      onClick={() => handleSelectMeal(rec)}
+                      className={`relative p-6 rounded-3xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 ${
+                        isSelected
+                          ? 'bg-zinc-900 border-[#F37A20] shadow-xl shadow-[#F37A20]/20 scale-[1.01]'
+                          : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      {/* شارة التميز */}
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          variant={rec.isExpiringSoonOffer ? 'special' : 'default'}
+                        >
+                          {rec.title_ar}
+                        </Badge>
+                        <div
+                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? 'bg-[#F37A20] border-[#F37A20] text-black'
+                              : 'border-zinc-700'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
                         </div>
-                      ))}
-                    </div>
+                      </div>
 
-                    {/* شريط الإجمالي للكارت */}
-                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-zinc-400">إجمالي السعرات: </span>
-                        <span className="font-bold text-emerald-400">
-                          {formatKcal(rec.totalKcal)}
-                        </span>
+                      {/* تفاصيل الوجبات في هذا الاقتراح */}
+                      <div className="space-y-3">
+                        {rec.items.map((item, iIdx) => (
+                          <div key={iIdx} className="flex items-center gap-3">
+                            <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
+                              <Image
+                                src={item.meal.image_url}
+                                alt={item.meal.name_ar}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-bold text-white text-base">
+                                {item.quantity} × {item.meal.name_ar}
+                              </div>
+                              <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
+                                <span>{formatKcal(item.meal.total_kcal * item.quantity)}</span>
+                                <span>•</span>
+                                <span>{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div>
-                        <span className="text-zinc-400">السعر: </span>
-                        <span className="text-base font-black text-white">
-                          {formatEgp(rec.totalPrice)}
-                        </span>
+
+                      {/* شريط الإجمالي للكارت */}
+                      <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-zinc-400">إجمالي السعرات: </span>
+                          <span className="font-bold text-emerald-400">
+                            {formatKcal(rec.totalKcal)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">السعر: </span>
+                          <span className="text-base font-black text-white">
+                            {formatEgp(rec.totalPrice)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
 
-            {/* تفاصيل نصيب الأفراد للاقتراح المحدد */}
-            {engineResult?.status === 'success' && engineResult.sharesByPerson && (
+            {/* تفاصيل نصيب الأفراد للوجبة المحددة حالياً (ديناميكي 100%) */}
+            {people.length > 0 && currentShares.length > 0 && (
               <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <div className="flex items-center gap-2 font-bold text-base text-zinc-200">
-                  <Users className="w-5 h-5 text-[#F37A20]" />
-                  <span>توزيع الحصص العادل على أفراد المجموعة:</span>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 font-bold text-base text-zinc-200">
+                    <Users className="w-5 h-5 text-[#F37A20]" />
+                    <span>
+                      نصيب كل فرد من وجبة{' '}
+                      <span className="text-[#F37A20]">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
+                    </span>
+                  </div>
+                  <Badge variant="default">يتم تحديثه تلقائياً حسب اختيارك</Badge>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {engineResult.sharesByPerson.map((sh, sIdx) => (
+                  {currentShares.map((sh, sIdx) => (
                     <div
                       key={sIdx}
                       className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 text-xs space-y-1.5"

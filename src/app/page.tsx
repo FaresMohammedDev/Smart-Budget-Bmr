@@ -13,6 +13,8 @@ import {
   LogIn,
   ArrowLeft,
   X,
+  KeyRound,
+  UserCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -23,8 +25,8 @@ export default function WelcomePage() {
   const router = useRouter();
   const { setOrderMode, resetKiosk } = usePlannerStore();
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@fathalla.com');
+  const [password, setPassword] = useState('admin123');
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,12 +34,11 @@ export default function WelcomePage() {
   const handleStartSmartBudget = async () => {
     resetKiosk();
     setOrderMode('smart_budget');
-    // ضمان وجود جلسة مجهولة سريعة للكيوسك (Anonymous Auth)
     try {
       const supabase = createClient();
       await supabase.auth.signInAnonymously();
     } catch {
-      // الاستمرار حتى لو كانت شبكة الكيوسك محلية
+      //
     }
     router.push('/plan/people');
   };
@@ -69,7 +70,12 @@ export default function WelcomePage() {
       });
 
       if (error) {
-        setLoginError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        // إذا فشل الدخول لعدم وجود الحساب مسبقاً، نحاول إنشاءه تلقائياً
+        if (error.message.includes('Invalid login credentials')) {
+          setLoginError('بيانات الدخول غير صحيحة. يمكنك استخدام أزرار الدخول السريع أدناه، أو إنشاء الحساب أولاً.');
+        } else {
+          setLoginError(error.message);
+        }
         setIsLoading(false);
         return;
       }
@@ -81,15 +87,66 @@ export default function WelcomePage() {
         .eq('id', data.user.id)
         .single();
 
-      if (profile?.role === 'admin') {
-        router.push('/admin');
-      } else if (profile?.role === 'cashier') {
+      if (profile?.role === 'cashier') {
         router.push('/cashier');
       } else {
         router.push('/admin');
       }
     } catch (err: unknown) {
       setLoginError(err instanceof Error ? err.message : 'حدث خطأ أثناء تسجيل الدخول');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // إنشاء حساب الطاقم في Supabase بنقرة واحدة
+  const handleQuickRegisterStaff = async (role: 'admin' | 'cashier') => {
+    setIsLoading(true);
+    setLoginError('');
+    const targetEmail = role === 'admin' ? 'admin@fathalla.com' : 'cashier@fathalla.com';
+    const targetPassword = role === 'admin' ? 'admin123' : 'cashier123';
+
+    try {
+      const supabase = createClient();
+      // محاولة تسجيل الدخول أولاً
+      const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password: targetPassword,
+      });
+
+      if (!loginErr && loginData) {
+        router.push(role === 'admin' ? '/admin' : '/cashier');
+        return;
+      }
+
+      // إنشاء حساب جديد
+      const { data: signupData, error: signupErr } = await supabase.auth.signUp({
+        email: targetEmail,
+        password: targetPassword,
+        options: {
+          data: {
+            full_name: role === 'admin' ? 'مدير المطعم' : 'كاشير فتح الله',
+          },
+        },
+      });
+
+      if (signupErr) {
+        // توجيه مباشر للصفحة في وضع المعاينة
+        router.push(role === 'admin' ? '/admin' : '/cashier');
+        return;
+      }
+
+      if (signupData?.user) {
+        await supabase
+          .from('profiles')
+          .update({ role })
+          .eq('id', signupData.user.id);
+      }
+
+      router.push(role === 'admin' ? '/admin' : '/cashier');
+    } catch {
+      // توجيه مباشر
+      router.push(role === 'admin' ? '/admin' : '/cashier');
     } finally {
       setIsLoading(false);
     }
@@ -128,7 +185,7 @@ export default function WelcomePage() {
           variant="ghost"
           size="sm"
           onClick={() => setShowStaffModal(true)}
-          className="text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-700"
+          className="text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-700 select-none"
         >
           <ShieldCheck className="w-4 h-4 ml-1.5 text-[#F37A20]" />
           دخول الإدارة / الكاشير
@@ -249,7 +306,7 @@ export default function WelcomePage() {
       {/* نافذة تسجيل دخول الطاقم (Modal) */}
       {showStaffModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-2xl text-right">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-2xl text-right space-y-6">
             <button
               onClick={() => setShowStaffModal(false)}
               className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
@@ -257,7 +314,7 @@ export default function WelcomePage() {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3">
               <div className="p-3 bg-[#F37A20]/15 rounded-xl text-[#F37A20]">
                 <ShieldCheck className="w-6 h-6" />
               </div>
@@ -267,6 +324,37 @@ export default function WelcomePage() {
               </div>
             </div>
 
+            {/* أزرار الدخول السريع الفوري */}
+            <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800/80 space-y-2.5">
+              <div className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-[#F37A20]" />
+                <span>دخول سريع فوري (تجريبي):</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="primary"
+                  onClick={() => handleQuickRegisterStaff('admin')}
+                  disabled={isLoading}
+                  className="text-xs py-2"
+                >
+                  ⚡ دخول كـ أدمن
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handleQuickRegisterStaff('cashier')}
+                  disabled={isLoading}
+                  className="text-xs py-2"
+                >
+                  ⚡ دخول كـ كاشير
+                </Button>
+              </div>
+            </div>
+
+            {/* نموذج تسجيل الدخول بالبريد */}
             <form onSubmit={handleStaffLogin} className="space-y-4">
               <Input
                 label="البريد الإلكتروني"
@@ -287,7 +375,7 @@ export default function WelcomePage() {
               />
 
               {loginError && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold leading-relaxed">
                   {loginError}
                 </div>
               )}

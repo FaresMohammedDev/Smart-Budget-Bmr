@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { PersonInput, MealTime } from '../../nutrition/domain/types';
-import { Meal, RecommendationOption } from '../../recommendations/domain/types';
+import { Meal, RecommendationOption, PersonShareDetail } from '../../recommendations/domain/types';
 import { getDefaultMealTime } from '../../nutrition/domain/meal-fraction';
 
 export interface CartItem {
@@ -27,9 +27,11 @@ interface PlannerState {
   mealTime: MealTime;
   setMealTime: (time: MealTime) => void;
 
-  // الوجبة المختارة للترشيح الذكي
+  // الوجبة المختارة للترشيح الذكي وحصص الأفراد الخاصة بها
   selectedRecommendation: RecommendationOption | null;
   setSelectedRecommendation: (rec: RecommendationOption | null) => void;
+  selectedShares: PersonShareDetail[];
+  setSelectedShares: (shares: PersonShareDetail[]) => void;
 
   // سلة الشراء لوضع E-Commerce (الطلب السريع)
   cart: CartItem[];
@@ -93,6 +95,9 @@ export const usePlannerStore = create<PlannerState>()(
       setSelectedRecommendation: (selectedRecommendation) =>
         set({ selectedRecommendation }),
 
+      selectedShares: [],
+      setSelectedShares: (selectedShares) => set({ selectedShares }),
+
       cart: [],
       addToCart: (meal) => {
         const currentCart = [...get().cart];
@@ -141,6 +146,7 @@ export const usePlannerStore = create<PlannerState>()(
           budget: 150,
           mealTime: getDefaultMealTime(),
           selectedRecommendation: null,
+          selectedShares: [],
           cart: [],
         }),
     }),

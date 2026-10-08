@@ -28,60 +28,23 @@ export default function CashierPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
-  // جلب الطلبات
+  // جلب الطلبات الفعلية من Supabase
   const loadOrders = async () => {
-    setLoading(true);
     try {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (!error && data) {
         setOrders(data);
       } else {
-        // بيانات تجريبية فورية للشاشة
-        setOrders([
-          {
-            id: 'ord-101',
-            order_number: 1042,
-            user_id: 'guest',
-            group_id: null,
-            order_mode: 'smart_budget',
-            people_count: 3,
-            budget: 350,
-            meal_fraction: 0.4,
-            daily_tdee_total: 7500,
-            required_kcal: 3000,
-            total_kcal: 2950,
-            total_price: 320,
-            status: 'pending',
-            paid_at: null,
-            created_at: new Date(Date.now() - 5 * 60000).toISOString(),
-          },
-          {
-            id: 'ord-102',
-            order_number: 1041,
-            user_id: 'guest',
-            group_id: null,
-            order_mode: 'quick_menu',
-            people_count: 1,
-            budget: 85,
-            meal_fraction: 0.4,
-            daily_tdee_total: null,
-            required_kcal: null,
-            total_kcal: 550,
-            total_price: 85,
-            status: 'paid',
-            paid_at: new Date().toISOString(),
-            created_at: new Date(Date.now() - 15 * 60000).toISOString(),
-          },
-        ]);
+        setOrders([]);
       }
     } catch {
-      //
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -89,6 +52,11 @@ export default function CashierPage() {
 
   useEffect(() => {
     loadOrders();
+    // تحديث دوري تلقائي كل 5 ثوانٍ لظهور الطلبات الجديدة فور صدورها من الكيوسك
+    const interval = setInterval(() => {
+      loadOrders();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // تأكيد دفع واستلام الأوردر
@@ -97,18 +65,20 @@ export default function CashierPage() {
     setMessage('');
     try {
       const supabase = createClient();
-      const { error } = await supabase.rpc('mark_order_as_paid', {
+      // محاولة عبر RPC أولاً
+      const { error: rpcError } = await supabase.rpc('mark_order_as_paid', {
         p_order_id: orderId,
       });
 
-      if (error) {
-        // تحديث محلي
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: 'paid', paid_at: new Date().toISOString() } : o))
-        );
-      } else {
-        await loadOrders();
+      if (rpcError) {
+        // تحديث مباشر في جدول orders
+        await supabase
+          .from('orders')
+          .update({ status: 'paid', paid_at: new Date().toISOString() })
+          .eq('id', orderId);
       }
+
+      await loadOrders();
       setMessage(`تم تأكيد دفع الطلب بنجاح!`);
     } catch {
       setOrders((prev) =>

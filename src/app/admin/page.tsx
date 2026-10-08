@@ -16,6 +16,8 @@ import {
   RotateCcw,
   LogOut,
   Sparkles,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -29,6 +31,8 @@ export default function AdminDashboardPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // فورم إضافة وجبة جديدة
@@ -253,6 +257,69 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // تعديل وجبة موجودة
+  const handleUpdateMeal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeal) return;
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('meals')
+        .update({
+          name_ar: editingMeal.name_ar,
+          name_en: editingMeal.name_en,
+          price: editingMeal.price,
+          discount_price: editingMeal.discount_price,
+          total_kcal: editingMeal.total_kcal,
+          kind: editingMeal.kind,
+          portion_type: editingMeal.portion_type,
+          is_expiring_soon: editingMeal.is_expiring_soon,
+          image_url: editingMeal.image_url,
+        })
+        .eq('id', editingMeal.id);
+
+      if (!error) {
+        await loadAdminMeals();
+      } else {
+        // تحديث محلي
+        setMeals((prev) =>
+          prev.map((m) => (m.id === editingMeal.id ? editingMeal : m))
+        );
+      }
+      setEditingMeal(null);
+    } catch {
+      setMeals((prev) =>
+        prev.map((m) => (m.id === editingMeal.id ? editingMeal : m))
+      );
+      setEditingMeal(null);
+    }
+  };
+
+  // حذف وجبة من المنيو
+  const handleDeleteMeal = async (mealId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذه الوجبة نهائياً من المنيو؟')) {
+      return;
+    }
+
+    setDeletingId(mealId);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from('meals').delete().eq('id', mealId);
+
+      if (!error) {
+        setMeals((prev) => prev.filter((m) => m.id !== mealId));
+      } else {
+        // حذف محلي
+        setMeals((prev) => prev.filter((m) => m.id !== mealId));
+      }
+    } catch {
+      setMeals((prev) => prev.filter((m) => m.id !== mealId));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col p-4 sm:p-8 space-y-8">
       {/* الرأس */}
@@ -382,6 +449,7 @@ export default function AdminDashboardPage() {
                   <th className="pb-3 font-semibold">النوع</th>
                   <th className="pb-3 font-semibold text-center">عرض قرب الصلاحية ⭐</th>
                   <th className="pb-3 font-semibold text-center">التوافر في المطبخ</th>
+                  <th className="pb-3 font-semibold text-center">إجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
@@ -447,6 +515,27 @@ export default function AdminDashboardPage() {
                       >
                         {meal.is_available ? 'متوفر بالمطبخ ✓' : 'غير متوفر (نافد) ✕'}
                       </button>
+                    </td>
+
+                    {/* أزرار التعديل والحذف */}
+                    <td className="py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setEditingMeal({ ...meal })}
+                          title="تعديل الوجبة"
+                          className="p-2 rounded-xl bg-zinc-800/80 hover:bg-[#F37A20]/20 text-zinc-300 hover:text-[#F37A20] transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMeal(meal.id)}
+                          disabled={deletingId === meal.id}
+                          title="حذف الوجبة"
+                          className="p-2 rounded-xl bg-zinc-800/80 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -573,6 +662,129 @@ export default function AdminDashboardPage() {
               <Button type="submit" size="lg" className="w-full mt-4">
                 حفظ وإضافة الوجبة
               </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تعديل وجبة موجودة (Edit Modal) */}
+      {editingMeal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setEditingMeal(null)}
+              className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-xl font-bold text-white mb-4">تعديل بيانات الوجبة</h3>
+
+            <form onSubmit={handleUpdateMeal} className="space-y-4">
+              <Input
+                label="اسم الوجبة بالعربي"
+                value={editingMeal.name_ar}
+                onChange={(e) => setEditingMeal({ ...editingMeal, name_ar: e.target.value })}
+                required
+              />
+
+              <Input
+                label="اسم الوجبة بالإنجليزي"
+                value={editingMeal.name_en}
+                onChange={(e) => setEditingMeal({ ...editingMeal, name_en: e.target.value })}
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="السعر الأساسي (ج.م)"
+                  type="number"
+                  value={editingMeal.price}
+                  onChange={(e) => setEditingMeal({ ...editingMeal, price: Number(e.target.value) })}
+                  required
+                />
+                <Input
+                  label="سعر الخصم إن وجد (ج.م)"
+                  type="number"
+                  value={editingMeal.discount_price ?? ''}
+                  onChange={(e) =>
+                    setEditingMeal({
+                      ...editingMeal,
+                      discount_price: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  placeholder="بدون خصم"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="إجمالي السعرات (Kcal)"
+                  type="number"
+                  value={editingMeal.total_kcal}
+                  onChange={(e) =>
+                    setEditingMeal({ ...editingMeal, total_kcal: Number(e.target.value) })
+                  }
+                  required
+                />
+
+                <div className="space-y-1.5 text-right">
+                  <label className="block text-sm font-semibold text-zinc-300">النوع</label>
+                  <select
+                    value={editingMeal.kind}
+                    onChange={(e) =>
+                      setEditingMeal({ ...editingMeal, kind: e.target.value as any })
+                    }
+                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-100 text-sm"
+                  >
+                    <option value="main">رئيسي</option>
+                    <option value="side">جانبي</option>
+                    <option value="drink">مشروب</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 text-right">
+                <label className="block text-sm font-semibold text-zinc-300">نوع التقديم</label>
+                <select
+                  value={editingMeal.portion_type}
+                  onChange={(e) =>
+                    setEditingMeal({ ...editingMeal, portion_type: e.target.value as any })
+                  }
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-100 text-sm"
+                >
+                  <option value="individual">فردي (وجبة لشخص)</option>
+                  <option value="shareable">تشاركي (صواني عائلية)</option>
+                </select>
+              </div>
+
+              {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingMeal.is_expiring_soon}
+                  onChange={(e) =>
+                    setEditingMeal({ ...editingMeal, is_expiring_soon: e.target.checked })
+                  }
+                  className="w-4 h-4 accent-[#F37A20]"
+                />
+                <span className="text-xs text-zinc-300 font-bold">
+                  تحديد كوجبة قربت صلاحيتها (عرض توفير طازج ⭐)
+                </span>
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <Button type="submit" size="lg" className="flex-1">
+                  حفظ التعديلات
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => setEditingMeal(null)}
+                >
+                  إلغاء
+                </Button>
+              </div>
             </form>
           </div>
         </div>

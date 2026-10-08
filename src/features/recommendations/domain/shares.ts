@@ -40,19 +40,29 @@ export function calculateGroupShares(
     const qty = item.quantity;
     const totalItemKcal = meal.total_kcal * qty;
 
-    if (meal.portion_type === 'shareable') {
-      // صواني أو أطباق تشاركية عائلية -> نسبة مئوية
+    if (meal.portion_type === 'shareable' || qty < people.length) {
+      // صواني أو أطباق تشاركية عائلية، أو وجبات فردية عددها أقل من عدد أفراد الجروب -> تقسيم تناسبي عادل
       shares.forEach((personShare, idx) => {
         const pRatio = normalizedPeople[idx]!.ratio;
         const personKcal = Math.round(totalItemKcal * pRatio);
         personShare.shareKcal += personKcal;
+        
+        let desc = '';
+        if (meal.portion_type === 'shareable') {
+          desc = `${Math.round(pRatio * 100)}% من ${meal.name_ar} (حوالي ${personKcal} سعرة)`;
+        } else {
+          // وجبة فردية مقسمة (مثلاً 2 نص فرخة على 5 أفراد)
+          const sharePortion = Math.round(pRatio * qty * 10) / 10;
+          desc = `${Math.round(pRatio * 100)}% مشاركة (${sharePortion} وجبة) من ${qty}x ${meal.name_ar} (${personKcal} سعرة)`;
+        }
+
         personShare.allocatedItems.push({
           mealNameAr: meal.name_ar,
-          portionDescription: `${Math.round(pRatio * 100)}% من ${meal.name_ar} (حوالي ${personKcal} سعرة)`,
+          portionDescription: desc,
         });
       });
     } else {
-      // أصناف فردية (ساندوتشات / وجبات فردية) -> Largest Remainder Method
+      // أصناف فردية تكفي أو تزيد عن عدد الأفراد (ساندوتشات / وجبات) -> Largest Remainder Method بوحدات صحيحة
       const exactQuotas = normalizedPeople.map((p) => p.ratio * qty);
       const integerUnits = exactQuotas.map((q) => Math.floor(q));
       let distributedUnits = integerUnits.reduce((sum, u) => sum + u, 0);

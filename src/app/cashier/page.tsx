@@ -22,6 +22,7 @@ import { OrderRow } from '@/types/database.types';
 export default function CashierPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -120,12 +121,19 @@ export default function CashierPage() {
   };
 
   const filteredOrders = orders.filter((o) => {
-    if (!searchTerm) return true;
-    return (
+    const matchesSearch =
+      !searchTerm ||
       o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.order_number.toString().includes(searchTerm)
-    );
+      o.order_number.toString().includes(searchTerm);
+
+    const matchesStatus =
+      statusFilter === 'all' ? true : o.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
   });
+
+  const paidCount = orders.filter((o) => o.status === 'paid').length;
+  const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col p-4 sm:p-8 space-y-6">
@@ -170,6 +178,48 @@ export default function CashierPage() {
           <QrCode className="w-6 h-6 text-[#F37A20] absolute left-4 top-4 pointer-events-none" />
         </div>
 
+        {/* فلاتر الحالات: الكل - المؤكدة (المدفوعة) - قيد الانتظار */}
+        <div className="flex items-center justify-center gap-2 p-1.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            جميع الطلبات ({orders.length})
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('paid')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              statusFilter === 'paid'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+                : 'text-zinc-400 hover:text-emerald-400'
+            }`}
+          >
+            <span>المؤكدة والمدفوعة ✓</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20">
+              {paidCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusFilter('pending')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              statusFilter === 'pending'
+                ? 'bg-[#F37A20]/20 text-[#F37A20] border border-[#F37A20]/30 shadow-sm'
+                : 'text-zinc-400 hover:text-[#F37A20]'
+            }`}
+          >
+            <span>في انتظار الدفع</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#F37A20]/20">
+              {pendingCount}
+            </span>
+          </button>
+        </div>
+
         {message && (
           <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold text-center">
             {message}
@@ -180,7 +230,13 @@ export default function CashierPage() {
       {/* قائمة الطلبات */}
       <div className="max-w-4xl mx-auto w-full space-y-4">
         <div className="flex items-center justify-between text-sm text-zinc-400">
-          <span>أحدث الطلبات المستلمة:</span>
+          <span>
+            {statusFilter === 'paid'
+              ? 'الطلبات المؤكدة والمدفوعة:'
+              : statusFilter === 'pending'
+              ? 'الطلبات في انتظار الدفع:'
+              : 'أحدث الطلبات المستلمة:'}
+          </span>
           <span>{filteredOrders.length} طلب</span>
         </div>
 

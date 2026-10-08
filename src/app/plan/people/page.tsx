@@ -304,7 +304,14 @@ export default function PeopleStepPage() {
       await loadUserAndGroups();
       setShowSaveModal(true);
     } catch (err: unknown) {
-      setAuthError(err instanceof Error ? err.message : 'حدث خطأ في التسجيل');
+      const msg = err instanceof Error ? err.message : 'حدث خطأ في التسجيل';
+      if (msg.toLowerCase().includes('rate limit')) {
+        setAuthError(
+          'تم تجاوز حد إرسال إيميلات التأكيد في Supabase. يرجى إيقاف "Confirm email" في إعدادات Supabase Auth للإنشاء الفوري، أو تسجيل الدخول بحساب سابق.'
+        );
+      } else {
+        setAuthError(msg);
+      }
     } finally {
       setAuthLoading(false);
     }

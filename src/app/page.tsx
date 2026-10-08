@@ -126,7 +126,13 @@ export default function WelcomePage() {
       });
 
       if (error) {
-        setCustomerError(error.message);
+        if (error.message.toLowerCase().includes('rate limit')) {
+          setCustomerError(
+            'تم تجاوز حد إرسال إيميلات التأكيد في Supabase (Email Rate Limit). يرجى إيقاف خيار "Confirm email" من إعدادات Supabase Auth لتفعيل الإنشاء الفوري بدون انتظار، أو يمكنك المتابعة كزائر سريع الآن بالأسفل.'
+          );
+        } else {
+          setCustomerError(error.message);
+        }
         setCustomerLoading(false);
         return;
       }

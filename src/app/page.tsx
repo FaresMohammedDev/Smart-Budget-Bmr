@@ -126,9 +126,14 @@ export default function WelcomePage() {
       });
 
       if (error) {
-        if (error.message.toLowerCase().includes('rate limit')) {
+        const lower = error.message.toLowerCase();
+        if (lower.includes('signups are disabled') || lower.includes('signup is disabled')) {
           setCustomerError(
-            'تم تجاوز حد إرسال إيميلات التأكيد في Supabase (Email Rate Limit). يرجى إيقاف خيار "Confirm email" من إعدادات Supabase Auth لتفعيل الإنشاء الفوري بدون انتظار، أو يمكنك المتابعة كزائر سريع الآن بالأسفل.'
+            'التسجيل الجديد مغلق في إعدادات Supabase Auth. يرجى تفعيل "Allow new users to sign up" والتأكد من تفعيل Email Provider من لوحة تحكم Supabase > Authentication > Providers > Email.'
+          );
+        } else if (lower.includes('rate limit')) {
+          setCustomerError(
+            'تم تجاوز حد إرسال إيميلات التأكيد في Supabase (Email Rate Limit). يرجى إيقاف خيار "Confirm email" فقط من إعدادات Supabase Auth لتفعيل الإنشاء الفوري بدون انتظار، أو يمكنك المتابعة كزائر سريع الآن بالأسفل.'
           );
         } else {
           setCustomerError(error.message);

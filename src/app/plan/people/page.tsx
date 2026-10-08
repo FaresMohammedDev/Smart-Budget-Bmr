@@ -305,9 +305,13 @@ export default function PeopleStepPage() {
       setShowSaveModal(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'حدث خطأ في التسجيل';
-      if (msg.toLowerCase().includes('rate limit')) {
+      if (msg.toLowerCase().includes('signups are disabled') || msg.toLowerCase().includes('signup is disabled')) {
         setAuthError(
-          'تم تجاوز حد إرسال إيميلات التأكيد في Supabase. يرجى إيقاف "Confirm email" في إعدادات Supabase Auth للإنشاء الفوري، أو تسجيل الدخول بحساب سابق.'
+          'التسجيل الجديد مغلق في Supabase Auth. يرجى تفعيل "Allow new users to sign up" من لوحة تحكم Supabase > Authentication > Providers > Email.'
+        );
+      } else if (msg.toLowerCase().includes('rate limit')) {
+        setAuthError(
+          'تم تجاوز حد إرسال إيميلات التأكيد في Supabase. يرجى إيقاف "Confirm email" فقط في إعدادات Supabase Auth للإنشاء الفوري، أو تسجيل الدخول بحساب سابق.'
         );
       } else {
         setAuthError(msg);

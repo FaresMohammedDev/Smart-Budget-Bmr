@@ -13,6 +13,7 @@ import {
   Sparkles,
   ArrowRight,
   Filter,
+  Check,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
@@ -67,7 +68,7 @@ export default function MenuEcommercePage() {
               kind: m.kind,
               portion_type: m.portion_type,
               servings: m.servings,
-              image_url: m.image_url || '/images/meal-placeholder.svg',
+              image_url: m.image_url || '/images/fathalla-logo.png',
             }))
           );
         }
@@ -115,7 +116,6 @@ export default function MenuEcommercePage() {
       clearCart();
       router.push(`/receipt/${orderId}`);
     } catch {
-      // احتياطي
       const fallbackId = `quick-${Date.now()}`;
       clearCart();
       router.push(`/receipt/${fallbackId}`);
@@ -125,37 +125,42 @@ export default function MenuEcommercePage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-8 space-y-8">
         {/* شريط العنوان والتصنيفات */}
-        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-zinc-800 pb-6">
+        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-orange-200/80 pb-6">
           <div>
-            <h1 className="text-3xl font-black text-white">
-              قائمة وجبات فتح الله ماركت
-            </h1>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-              الطلب السريع المباشر (E-Commerce) مع توضيح السعرات والأسعار لكل وجبة
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-black text-stone-900">
+                منيو وجبات فتح الله ماركت 🍽️
+              </h1>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-black border border-red-200">
+                طازة وسخن 🔥
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-stone-600 mt-1 font-medium">
+              اطلب وجباتك المفضلة مباشرة مع توضيح السعرات الحرارية والأسعار بدقة
             </p>
           </div>
 
           {/* تبويبات الأقسام */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {[
-              { id: 'all', label: 'الكل' },
-              { id: 'offers', label: 'عروض فتح الله الخاصة ⭐' },
-              { id: 'main', label: 'وجبات رئيسية' },
-              { id: 'side', label: 'أطباق جانبية' },
-              { id: 'drink', label: 'مشروبات' },
+              { id: 'all', label: 'الكل 🍽️' },
+              { id: 'offers', label: 'عروض التوفير ⭐' },
+              { id: 'main', label: 'وجبات رئيسية 🍗' },
+              { id: 'side', label: 'أطباق جانبية 🍟' },
+              { id: 'drink', label: 'مشروبات 🥤' },
             ].map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${
                   selectedCategory === cat.id
-                    ? 'bg-[#F37A20] text-white shadow-md'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                    ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md shadow-orange-500/25 scale-105'
+                    : 'bg-white text-stone-700 hover:bg-orange-50 border border-stone-200'
                 }`}
               >
                 {cat.label}
@@ -166,12 +171,12 @@ export default function MenuEcommercePage() {
 
         {/* شبكة الوجبات وسلة الشراء */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* قسم الوجبات (عمودين في الشاشات الكبيرة) */}
+          {/* قسم الوجبات */}
           <div className="lg:col-span-2">
             {loading ? (
               <div className="p-16 text-center space-y-4">
-                <div className="w-12 h-12 border-4 border-[#F37A20] border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-zinc-400 font-bold">جاري تحميل القائمة الطازجة...</p>
+                <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-stone-600 font-bold">جاري تحميل أشهى الوجبات الطازجة...</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -183,55 +188,55 @@ export default function MenuEcommercePage() {
                   return (
                     <div
                       key={meal.id}
-                      className="p-5 rounded-3xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all flex flex-col justify-between space-y-4"
+                      className="p-5 rounded-3xl bg-white border border-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md flex flex-col justify-between space-y-4 group"
                     >
                       <div className="space-y-3">
-                        <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
+                        <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-stone-100 border border-stone-200">
                           <Image
                             src={meal.image_url || '/images/fathalla-logo.png'}
                             alt={meal.name_ar}
                             fill
                             unoptimized
-                            className="object-cover"
+                            className="object-cover group-hover:scale-105 transition-transform"
                           />
                           {meal.is_expiring_soon && (
                             <div className="absolute top-2.5 right-2.5">
-                              <Badge variant="special">عرض توفير خاص ⭐</Badge>
+                              <Badge variant="special">عرض توفير طازج ⭐</Badge>
                             </div>
                           )}
                         </div>
 
                         <div>
-                          <h3 className="font-bold text-lg text-white">
+                          <h3 className="font-black text-lg text-stone-900 group-hover:text-orange-600 transition-colors">
                             {meal.name_ar}
                           </h3>
-                          <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-400">
-                            <span className="flex items-center gap-1 text-[#F37A20] font-semibold">
-                              <Flame className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-2 mt-1.5 text-xs text-stone-500 font-bold">
+                            <span className="flex items-center gap-1 text-orange-600">
+                              <Flame className="w-3.5 h-3.5 text-red-600" />
                               {formatKcal(meal.total_kcal)}
                             </span>
                             <span>•</span>
-                            <span>{meal.portion_type === 'shareable' ? 'تشاركي عائلي' : 'فردي'}</span>
+                            <span className="text-stone-700">{meal.portion_type === 'shareable' ? 'تشاركي عائلي' : 'وجبة فردية'}</span>
                           </div>
                         </div>
                       </div>
 
                       {/* السعر وزر الإضافة */}
-                      <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between">
+                      <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
                         <div>
                           {meal.discount_price ? (
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="text-lg font-black text-white">
+                            <div>
+                              <div className="text-xl font-black text-red-600">
                                 {formatEgp(meal.discount_price)}
-                              </span>
-                              <span className="text-xs text-zinc-500 line-through">
+                              </div>
+                              <div className="text-xs text-stone-400 line-through">
                                 {formatEgp(meal.price)}
-                              </span>
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-lg font-black text-white">
+                            <div className="text-xl font-black text-red-600">
                               {formatEgp(meal.price)}
-                            </span>
+                            </div>
                           )}
                         </div>
 
@@ -239,25 +244,25 @@ export default function MenuEcommercePage() {
                           <Button
                             size="sm"
                             onClick={() => addToCart(meal)}
-                            className="gap-1.5"
+                            className="gap-1.5 shadow-md shadow-orange-500/20 px-4 py-2"
                           >
                             <Plus className="w-4 h-4" />
-                            <span>إضافة</span>
+                            <span>إضافة للطلب</span>
                           </Button>
                         ) : (
-                          <div className="flex items-center gap-2 bg-zinc-950 px-2 py-1 rounded-xl border border-zinc-800">
+                          <div className="flex items-center gap-2 bg-orange-50 p-1.5 rounded-2xl border border-orange-200">
                             <button
                               onClick={() => updateCartQuantity(meal.id, qty - 1)}
-                              className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-zinc-700"
+                              className="w-8 h-8 rounded-xl bg-white hover:bg-stone-100 text-stone-900 font-black flex items-center justify-center border border-stone-200 shadow-sm"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="w-6 text-center font-bold text-sm">
+                            <span className="w-6 text-center font-black text-sm text-stone-900">
                               {qty}
                             </span>
                             <button
                               onClick={() => addToCart(meal)}
-                              className="w-7 h-7 rounded-lg bg-[#F37A20] text-black font-bold flex items-center justify-center hover:bg-[#d96614]"
+                              className="w-8 h-8 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 text-white font-black flex items-center justify-center shadow-sm"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -273,22 +278,22 @@ export default function MenuEcommercePage() {
 
           {/* سلة الشراء الجانبية */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-6">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-[#F37A20]/15 text-[#F37A20]">
+            <div className="sticky top-24 p-6 rounded-3xl bg-white border border-orange-100 shadow-md space-y-6">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-orange-100 text-orange-600">
                     <ShoppingBag className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base">سلة الطلب السريع</h3>
-                    <p className="text-xs text-zinc-400">{totalCartCount} وجبة مختارة</p>
+                    <h3 className="font-black text-base text-stone-900">سلة طلباتك</h3>
+                    <p className="text-xs text-stone-500 font-bold">{totalCartCount} وجبات مختارة</p>
                   </div>
                 </div>
 
                 {cart.length > 0 && (
                   <button
                     onClick={clearCart}
-                    className="text-xs text-zinc-400 hover:text-red-400 transition-colors flex items-center gap-1"
+                    className="text-xs text-red-600 hover:text-red-700 transition-colors flex items-center gap-1 font-bold"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     تفريغ
@@ -298,10 +303,10 @@ export default function MenuEcommercePage() {
 
               {/* عناصر السلة */}
               {cart.length === 0 ? (
-                <div className="py-12 text-center space-y-2 text-zinc-500">
-                  <ShoppingBag className="w-10 h-10 mx-auto stroke-1" />
-                  <p className="text-sm">السلة فارغة حالياً</p>
-                  <p className="text-xs">اختر وجباتك من القائمة لتظهر هنا</p>
+                <div className="py-12 text-center space-y-2 text-stone-400">
+                  <ShoppingBag className="w-12 h-12 mx-auto stroke-1 text-stone-300" />
+                  <p className="text-sm font-bold text-stone-600">السلة فارغة حالياً</p>
+                  <p className="text-xs">اضغط على "إضافة للطلب" عند أي وجبة لتظهر هنا</p>
                 </div>
               ) : (
                 <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
@@ -310,13 +315,13 @@ export default function MenuEcommercePage() {
                     return (
                       <div
                         key={item.meal.id}
-                        className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between text-xs"
+                        className="p-3.5 rounded-2xl bg-orange-50/50 border border-orange-100 flex items-center justify-between text-xs"
                       >
                         <div>
-                          <div className="font-bold text-white">
+                          <div className="font-black text-stone-900 text-sm">
                             {item.meal.name_ar}
                           </div>
-                          <div className="text-zinc-400 mt-0.5">
+                          <div className="text-stone-500 mt-0.5 font-bold">
                             {formatEgp(price)} للواحدة • {formatKcal(item.meal.total_kcal * item.quantity)}
                           </div>
                         </div>
@@ -326,16 +331,16 @@ export default function MenuEcommercePage() {
                             onClick={() =>
                               updateCartQuantity(item.meal.id, item.quantity - 1)
                             }
-                            className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center"
+                            className="w-7 h-7 rounded-lg bg-white border border-stone-200 text-stone-800 flex items-center justify-center font-black shadow-sm"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="w-5 text-center font-bold">
+                          <span className="w-6 text-center font-black text-stone-900">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => addToCart(item.meal)}
-                            className="w-6 h-6 rounded-md bg-[#F37A20] text-black font-bold flex items-center justify-center"
+                            className="w-7 h-7 rounded-lg bg-gradient-to-r from-red-600 to-orange-500 text-white flex items-center justify-center font-black shadow-sm"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -348,30 +353,26 @@ export default function MenuEcommercePage() {
 
               {/* ملخص السلة */}
               {cart.length > 0 && (
-                <div className="space-y-4 pt-4 border-t border-zinc-800">
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between text-zinc-400">
-                      <span>إجمالي السعرات:</span>
-                      <span className="font-bold text-emerald-400">
-                        {formatKcal(totalKcal)}
-                      </span>
+                <div className="space-y-4 pt-4 border-t border-stone-100">
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-stone-600 font-bold">
+                      <span>إجمالي السعرات الحرارية:</span>
+                      <span className="text-emerald-700 font-black">{formatKcal(totalKcal)}</span>
                     </div>
-                    <div className="flex justify-between text-base font-black text-white">
-                      <span>إجمالي السعر:</span>
-                      <span className="text-xl text-[#F37A20]">
-                        {formatEgp(totalPrice)}
-                      </span>
+                    <div className="flex justify-between text-base font-black text-stone-900">
+                      <span>إجمالي الحساب:</span>
+                      <span className="text-xl text-red-600">{formatEgp(totalPrice)}</span>
                     </div>
                   </div>
 
                   <Button
-                    size="lg"
+                    size="xl"
                     onClick={handleCheckout}
                     disabled={ordering}
-                    className="w-full gap-2"
+                    className="w-full gap-2 shadow-xl shadow-orange-500/25 py-4 text-base"
                   >
                     <Printer className="w-5 h-5" />
-                    <span>{ordering ? 'جاري التحضير...' : 'طباعة بون الكاشير'}</span>
+                    <span>{ordering ? 'جاري تجهيز البون...' : 'تأكيد الطلب وطباعة البون 🧾'}</span>
                   </Button>
                 </div>
               )}

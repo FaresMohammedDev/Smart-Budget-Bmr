@@ -214,26 +214,26 @@ export default function ReceiptPrintPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-8 space-y-8">
         {/* شارة النجاح */}
-        <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto animate-bounce">
+        <div className="p-8 rounded-3xl bg-white border border-orange-100 shadow-sm text-center space-y-3">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto animate-bounce">
             <CheckCircle2 className="w-9 h-9" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white">
-            تم تسجيل طلبك بنجاح!
+          <h1 className="text-2xl sm:text-3xl font-black text-stone-900">
+            تم تسجيل طلبك بنجاح! 🎉
           </h1>
-          <p className="text-sm text-zinc-400 max-w-lg mx-auto">
-            يرجى طباعة البون أدناه والتوجه به إلى كاشير قسم الوجبات بفتح الله ماركت لتأكيد الدفع واستلام الوجبة فوراً.
+          <p className="text-sm text-stone-600 max-w-lg mx-auto font-medium">
+            اطبع البون وتوجه به مباشرة لكاشير قسم الوجبات بفتح الله ماركت لتأكيد الدفع واستلام وجبتك الساخنة فوراً.
           </p>
 
-          <div className="flex items-center justify-center gap-2 text-xs text-zinc-500 pt-2">
-            <Clock className="w-4 h-4 text-[#F37A20]" />
+          <div className="flex items-center justify-center gap-2 text-xs text-stone-500 font-bold pt-2">
+            <Clock className="w-4 h-4 text-orange-600" />
             <span>سيتم إعادة ضبط الشاشة تلقائياً بعد: </span>
-            <span className="font-bold text-[#F37A20] text-sm">{countdown} ثانية</span>
+            <span className="font-black text-red-600 text-sm">{countdown} ثانية</span>
           </div>
         </div>
 
@@ -242,30 +242,30 @@ export default function ReceiptPrintPage() {
           <Button
             size="xl"
             onClick={handlePrintClick}
-            className="gap-3 text-lg px-8 py-4 shadow-xl select-none"
+            className="gap-3 text-lg px-8 py-4 shadow-xl shadow-orange-500/25 select-none"
           >
             <Printer className="w-6 h-6" />
-            <span>طباعة البون الآن</span>
+            <span>طباعة البون الآن 🧾</span>
           </Button>
 
           <Button
             variant="secondary"
             size="xl"
             onClick={handleFinish}
-            className="gap-2 select-none"
+            className="gap-2 select-none bg-white hover:bg-stone-100 text-stone-800 border-stone-200 shadow-sm"
           >
-            <RotateCcw className="w-5 h-5 text-zinc-400" />
+            <RotateCcw className="w-5 h-5 text-stone-500" />
             <span>طلب جديد</span>
           </Button>
         </div>
 
         {/* معاينة البون (تطابق الورق الحراري 80mm) */}
         <div className="space-y-3">
-          <div className="text-center text-xs font-bold text-zinc-400">
+          <div className="text-center text-xs font-bold text-stone-500">
             معاينة بون الكاشير الحراري (80mm Thermal Receipt)
           </div>
 
-          <div className="p-4 bg-zinc-900/60 rounded-3xl border border-zinc-800 flex justify-center overflow-x-auto">
+          <div className="p-6 bg-white rounded-3xl border border-orange-100 shadow-sm flex justify-center overflow-x-auto">
             {/* الحاوية المضمونة للـ Ref */}
             <div ref={receiptRef}>
               <Receipt

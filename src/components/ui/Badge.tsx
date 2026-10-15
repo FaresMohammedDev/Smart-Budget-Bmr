@@ -11,11 +11,11 @@ export function Badge({
   ...props
 }: BadgeProps) {
   const variants = {
-    default: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-    special: 'bg-[#F37A20]/20 text-[#F37A20] border-[#F37A20]/40 font-bold animate-pulse',
-    success: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium',
-    warning: 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-medium',
-    info: 'bg-sky-500/15 text-sky-400 border-sky-500/30 font-medium',
+    default: 'bg-stone-100 text-stone-700 border-stone-200',
+    special: 'bg-gradient-to-r from-orange-500 to-red-500 text-white border-0 font-black shadow-sm shadow-orange-500/20',
+    success: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold',
+    warning: 'bg-amber-50 text-amber-700 border-amber-200 font-bold',
+    info: 'bg-orange-50 text-orange-700 border-orange-200 font-bold',
   };
 
   return (

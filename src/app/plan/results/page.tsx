@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   Sparkles,
-  Flame,
-  Wallet,
-  Users,
-  Check,
-  Printer,
   ArrowRight,
+  Printer,
   AlertCircle,
-  TrendingDown,
-  ShoppingBag,
+  Check,
+  Flame,
+  Users,
+  Utensils,
+  Share2,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
@@ -22,14 +21,19 @@ import { usePlannerStore } from '@/features/planner/store/planner.store';
 import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
 import { calculateTargetMealKcal } from '@/features/nutrition/domain/meal-fraction';
+import { formatEgp, formatKcal } from '@/lib/format';
+import {
+  EngineResult,
+  Meal,
+  RecommendationOption,
+  PersonShareDetail,
+} from '@/features/recommendations/domain/types';
+import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { recommendMeals } from '@/features/recommendations/domain/engine';
 import { calculateGroupShares } from '@/features/recommendations/domain/shares';
-import { EngineResult, Meal, RecommendationOption } from '@/features/recommendations/domain/types';
-import { PersonNutrition } from '@/features/nutrition/domain/types';
-import { formatEgp, formatKcal } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 
-export default function ResultsStepPage() {
+export default function PlanResultsPage() {
   const router = useRouter();
   const {
     people,
@@ -40,13 +44,14 @@ export default function ResultsStepPage() {
     setSelectedShares,
   } = usePlannerStore();
 
+  const [loading, setLoading] = useState(true);
   const [engineResult, setEngineResult] = useState<EngineResult | null>(null);
   const [selectedOpt, setSelectedOpt] = useState<RecommendationOption | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [currentShares, setCurrentShares] = useState<PersonShareDetail[]>([]);
   const [ordering, setOrdering] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 1. حساب سعرات الأشخاص
+  // 1. حساب السعرات التقديرية للأفراد
   const peopleNutrition: PersonNutrition[] = people.map((p, idx) => {
     try {
       const bmr = calculateBmr(p.gender, p.weightKg, p.heightCm, p.age);
@@ -71,25 +76,21 @@ export default function ResultsStepPage() {
     }
   });
 
-  const totalTdee = peopleNutrition.reduce((sum, p) => sum + p.tdee, 0);
-  const targetKcal = calculateTargetMealKcal(totalTdee, mealTime);
+  const totalGroupTdee = peopleNutrition.reduce((sum, p) => sum + p.tdee, 0);
+  const targetKcal = calculateTargetMealKcal(totalGroupTdee, mealTime);
 
-  // حساب الحصص ديناميكياً للوجبة المختارة حالياً
-  const currentShares = selectedOpt && peopleNutrition.length > 0
-    ? calculateGroupShares(peopleNutrition, selectedOpt.items)
-    : [];
-
-  // دالة اختيار الوجبة وتحديث الحصص في الـ State
-  const handleSelectMeal = (rec: RecommendationOption) => {
-    setSelectedOpt(rec);
-    setSelectedRecommendation(rec);
+  // تحديث الحصص عند اختيار وجبة
+  const handleSelectMeal = (opt: RecommendationOption) => {
+    setSelectedOpt(opt);
+    setSelectedRecommendation(opt);
     if (peopleNutrition.length > 0) {
-      const updatedShares = calculateGroupShares(peopleNutrition, rec.items);
-      setSelectedShares(updatedShares);
+      const shares = calculateGroupShares(peopleNutrition, opt.items);
+      setCurrentShares(shares);
+      setSelectedShares(shares);
     }
   };
 
-  // 2. جلب الوجبات وتشغيل المحرك
+  // 2. استدعاء المنيو الفعلي من Supabase
   useEffect(() => {
     async function fetchAndRecommend() {
       setLoading(true);
@@ -97,20 +98,16 @@ export default function ResultsStepPage() {
         const supabase = createClient();
         const { data: dbMeals, error } = await supabase
           .from('meals')
-          .select('*, meal_items(quantity, food_items(*))')
+          .select('*')
           .eq('is_available', true);
 
-        let mealsToUse: Meal[] = [];
+        let mealsPool: Meal[] = [];
 
-        if (error || !dbMeals || dbMeals.length === 0) {
-          mealsToUse = [];
-        } else {
-          mealsToUse = dbMeals.map((m: any) => ({
+        if (!error && dbMeals && dbMeals.length > 0) {
+          mealsPool = dbMeals.map((m: any) => ({
             id: m.id,
             name_ar: m.name_ar,
             name_en: m.name_en,
-            description_ar: m.description_ar,
-            description_en: m.description_en,
             price: Number(m.price),
             discount_price: m.discount_price ? Number(m.discount_price) : null,
             is_expiring_soon: Boolean(m.is_expiring_soon),
@@ -118,30 +115,33 @@ export default function ResultsStepPage() {
             total_kcal: Number(m.total_kcal),
             kind: m.kind,
             portion_type: m.portion_type,
-            servings: m.servings,
-            image_url: m.image_url || '/images/meal-placeholder.svg',
+            servings: m.servings || 1,
+            image_url: m.image_url || '/images/fathalla-logo.png',
           }));
         }
 
+        // تشغيل المحرك
         const res = recommendMeals({
-          availableMeals: mealsToUse,
+          availableMeals: mealsPool,
           targetKcal,
           budget,
           people: peopleNutrition,
         });
 
         setEngineResult(res);
+
         if (res.status === 'success' && res.recommendations.length > 0) {
-          const firstRec = res.recommendations[0]!;
-          setSelectedOpt(firstRec);
-          setSelectedRecommendation(firstRec);
+          const first = res.recommendations[0];
+          setSelectedOpt(first);
+          setSelectedRecommendation(first);
           if (peopleNutrition.length > 0) {
-            const initialShares = calculateGroupShares(peopleNutrition, firstRec.items);
-            setSelectedShares(initialShares);
+            const shares = calculateGroupShares(peopleNutrition, first.items);
+            setCurrentShares(shares);
+            setSelectedShares(shares);
           }
         }
       } catch (err: unknown) {
-        setErrorMsg('حدث خطأ في جلب الوجبات');
+        setErrorMsg('حدث خطأ أثناء تحميل الوجبات.');
       } finally {
         setLoading(false);
       }
@@ -164,7 +164,6 @@ export default function ResultsStepPage() {
         quantity: i.quantity,
       }));
 
-      // الحصص الدقيقة المحسوبة للوجبة المختارة حالياً
       const peoplePayload = people.map((p, idx) => ({
         name: p.name || `فرد ${idx + 1}`,
         age: p.age,
@@ -177,7 +176,6 @@ export default function ResultsStepPage() {
         share_details: currentShares[idx]?.allocatedItems ?? [],
       }));
 
-      // استدعاء دالة create_order الآمنة في Supabase
       const { data: orderId, error: rpcError } = await supabase.rpc('create_order', {
         p_payload: {
           budget,
@@ -197,7 +195,6 @@ export default function ResultsStepPage() {
       setSelectedShares(currentShares);
       router.push(`/receipt/${orderId}`);
     } catch (err: unknown) {
-      // احتياطي فوري لتوليد البون والمعاينة بسلاسة
       const fallbackOrderId = `ord-${Date.now()}`;
       setSelectedRecommendation(selectedOpt);
       setSelectedShares(currentShares);
@@ -208,72 +205,72 @@ export default function ResultsStepPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-8 space-y-6">
         {/* شريط المراحل */}
-        <div className="flex items-center justify-between text-xs sm:text-sm text-zinc-400 border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center text-xs">
+        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b border-orange-200/80 pb-4">
+          <div className="flex items-center gap-2 text-stone-500">
+            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
               ✓
             </span>
             <span>بيانات الأفراد</span>
           </div>
-          <div className="h-0.5 w-12 bg-zinc-800" />
-          <div className="flex items-center gap-2 text-zinc-400">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center text-xs">
+          <div className="h-1 flex-1 mx-4 rounded-full bg-emerald-200" />
+          <div className="flex items-center gap-2 text-stone-500">
+            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
               ✓
             </span>
             <span>الميزانية والوقت</span>
           </div>
-          <div className="h-0.5 w-12 bg-zinc-800" />
-          <div className="flex items-center gap-2 text-[#F37A20] font-bold">
-            <span className="w-6 h-6 rounded-full bg-[#F37A20] text-black flex items-center justify-center font-black text-xs">
+          <div className="h-1 flex-1 mx-4 rounded-full bg-orange-200" />
+          <div className="flex items-center gap-2 text-red-600">
+            <span className="w-7 h-7 rounded-full bg-gradient-to-r from-red-600 to-orange-500 text-white flex items-center justify-center font-black text-xs shadow-sm">
               3
             </span>
-            <span>الترشيحات الذكية</span>
+            <span>ترشيح الوجبات</span>
           </div>
         </div>
 
         {loading ? (
           <div className="p-16 text-center space-y-4">
-            <div className="w-12 h-12 border-4 border-[#F37A20] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-zinc-400 font-bold">جاري حساب أفضل التوليفات من منيو فتح الله...</p>
+            <div className="w-14 h-14 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-stone-600 font-black text-lg">جاري حساب أفضل التوليفات الطازجة من منيو فتح الله...</p>
           </div>
         ) : engineResult?.status === 'low_budget' ? (
-          /* حالة الميزانية القليلة (Edge Case) */
-          <div className="p-8 rounded-3xl bg-zinc-900 border-2 border-amber-500/30 space-y-6 text-right">
+          /* حالة الميزانية القليلة */
+          <div className="p-8 rounded-3xl bg-white border-2 border-amber-300 shadow-sm space-y-6 text-right">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-2xl bg-amber-500/15 text-amber-400">
+              <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-700">
                 <AlertCircle className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white">اعتذار وتوضيح للميزانية</h3>
-                <p className="text-sm text-zinc-300 mt-2 leading-relaxed">
+                <h3 className="text-2xl font-black text-stone-900">توضيح بخصوص الميزانية</h3>
+                <p className="text-sm text-stone-600 mt-2 leading-relaxed font-medium">
                   {engineResult.apologyMessageAr}
                 </p>
               </div>
             </div>
 
             {engineResult.suggestedSides.length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-zinc-800">
-                <h4 className="font-bold text-base text-[#F37A20]">
+              <div className="space-y-3 pt-4 border-t border-stone-100">
+                <h4 className="font-bold text-base text-orange-600">
                   اقتراحات إضافات وسناكس تكفي ميزانيتك الحالية ({formatEgp(engineResult.budget)}):
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {engineResult.suggestedSides.map((item, idx) => (
                     <div
                       key={idx}
-                      className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between"
+                      className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100 flex items-center justify-between"
                     >
                       <div>
-                        <div className="font-bold">{item.meal.name_ar}</div>
-                        <div className="text-xs text-zinc-400">
+                        <div className="font-bold text-stone-900">{item.meal.name_ar}</div>
+                        <div className="text-xs text-stone-500">
                           {formatKcal(item.meal.total_kcal)}
                         </div>
                       </div>
-                      <div className="text-emerald-400 font-black">
+                      <div className="text-red-600 font-black">
                         {formatEgp(item.meal.discount_price ?? item.meal.price)}
                       </div>
                     </div>
@@ -302,23 +299,23 @@ export default function ResultsStepPage() {
           <div className="space-y-8">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white">
-                  أفضل الوجبات المقترحة لك
+                <h2 className="text-2xl sm:text-3xl font-black text-stone-900">
+                  أفضل توليفات الوجبات المقترحة لكم 🍽️
                 </h2>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                  محسوبة بدقة وفقاً للميزانية ({formatEgp(budget)}) والاحتياج ({formatKcal(targetKcal)})
+                <p className="text-xs sm:text-sm text-stone-600 mt-1 font-medium">
+                  مضبوطة بدقة لتناسب ميزانيتكم ({formatEgp(budget)}) وتشبعكم تماماً ({formatKcal(targetKcal)})
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-zinc-900 px-4 py-2 rounded-2xl border border-zinc-800 text-xs">
-                <Sparkles className="w-4 h-4 text-[#F37A20]" />
-                <span className="font-bold text-zinc-200">
-                  {engineResult?.status === 'success' ? engineResult.recommendations.length : 0} اقتراحات متوازنة
+              <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-200 text-xs shadow-sm">
+                <Sparkles className="w-4 h-4 text-orange-600" />
+                <span className="font-black text-orange-950">
+                  {engineResult?.status === 'success' ? engineResult.recommendations.length : 0} توليفات مشبعة
                 </span>
               </div>
             </div>
 
-            {/* قائمة كروت الترشيحات - اختيار الوجبة يغير التقسيم فورياً */}
+            {/* قائمة كروت الترشيحات */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {engineResult?.status === 'success' &&
                 engineResult.recommendations.map((rec) => {
@@ -327,10 +324,10 @@ export default function ResultsStepPage() {
                     <div
                       key={rec.id}
                       onClick={() => handleSelectMeal(rec)}
-                      className={`relative p-6 rounded-3xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 ${
+                      className={`relative p-6 rounded-3xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 shadow-sm ${
                         isSelected
-                          ? 'bg-zinc-900 border-[#F37A20] shadow-xl shadow-[#F37A20]/20 scale-[1.01]'
-                          : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
+                          ? 'bg-orange-50/70 border-orange-500 shadow-xl shadow-orange-500/20 scale-[1.01]'
+                          : 'bg-white border-stone-200 hover:border-orange-300 hover:shadow-md'
                       }`}
                     >
                       {/* شارة التميز */}
@@ -341,10 +338,10 @@ export default function ResultsStepPage() {
                           {rec.title_ar}
                         </Badge>
                         <div
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
                             isSelected
-                              ? 'bg-[#F37A20] border-[#F37A20] text-black'
-                              : 'border-zinc-700'
+                              ? 'bg-gradient-to-r from-red-600 to-orange-500 border-transparent text-white'
+                              : 'border-stone-300'
                           }`}
                         >
                           {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
@@ -355,7 +352,7 @@ export default function ResultsStepPage() {
                       <div className="space-y-3">
                         {rec.items.map((item, iIdx) => (
                           <div key={iIdx} className="flex items-center gap-3">
-                            <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 flex-shrink-0">
+                            <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 flex-shrink-0 shadow-sm">
                               <Image
                                 src={item.meal.image_url || '/images/fathalla-logo.png'}
                                 alt={item.meal.name_ar}
@@ -365,13 +362,13 @@ export default function ResultsStepPage() {
                               />
                             </div>
                             <div className="flex-1">
-                              <div className="font-bold text-white text-base">
+                              <div className="font-black text-stone-900 text-base">
                                 {item.quantity} × {item.meal.name_ar}
                               </div>
-                              <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
-                                <span>{formatKcal(item.meal.total_kcal * item.quantity)}</span>
+                              <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5 font-bold">
+                                <span className="text-orange-600">{formatKcal(item.meal.total_kcal * item.quantity)}</span>
                                 <span>•</span>
-                                <span>{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
+                                <span className="text-stone-700">{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
                               </div>
                             </div>
                           </div>
@@ -379,16 +376,16 @@ export default function ResultsStepPage() {
                       </div>
 
                       {/* شريط الإجمالي للكارت */}
-                      <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs">
+                      <div className="pt-3 border-t border-stone-200 flex items-center justify-between text-xs">
                         <div>
-                          <span className="text-zinc-400">إجمالي السعرات: </span>
-                          <span className="font-bold text-emerald-400">
+                          <span className="text-stone-500 font-bold">إجمالي السعرات: </span>
+                          <span className="font-black text-emerald-700 text-sm">
                             {formatKcal(rec.totalKcal)}
                           </span>
                         </div>
                         <div>
-                          <span className="text-zinc-400">السعر: </span>
-                          <span className="text-base font-black text-white">
+                          <span className="text-stone-500 font-bold">السعر الكلي: </span>
+                          <span className="text-lg font-black text-red-600">
                             {formatEgp(rec.totalPrice)}
                           </span>
                         </div>
@@ -398,34 +395,34 @@ export default function ResultsStepPage() {
                 })}
             </div>
 
-            {/* تفاصيل نصيب الأفراد للوجبة المحددة حالياً (ديناميكي 100%) */}
+            {/* تفاصيل نصيب الأفراد للوجبة المحددة حالياً */}
             {people.length > 0 && currentShares.length > 0 && (
-              <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
+              <div className="p-6 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 font-bold text-base text-zinc-200">
-                    <Users className="w-5 h-5 text-[#F37A20]" />
+                  <div className="flex items-center gap-2 font-black text-base text-stone-900">
+                    <Users className="w-5 h-5 text-orange-600" />
                     <span>
                       نصيب كل فرد من وجبة{' '}
-                      <span className="text-[#F37A20]">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
+                      <span className="text-orange-600">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
                     </span>
                   </div>
-                  <Badge variant="default">يتم تحديثه تلقائياً حسب اختيارك</Badge>
+                  <Badge variant="default">حساب تلقائي حسب السعرات</Badge>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                   {currentShares.map((sh, sIdx) => (
                     <div
                       key={sIdx}
-                      className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800/80 text-xs space-y-1.5"
+                      className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100 text-xs space-y-1.5"
                     >
-                      <div className="flex justify-between font-bold text-white">
+                      <div className="flex justify-between font-black text-stone-900">
                         <span>{sh.personName}</span>
-                        <span className="text-[#F37A20]">{sh.sharePercent}%</span>
+                        <span className="text-orange-600">{sh.sharePercent}%</span>
                       </div>
-                      <div className="text-emerald-400 font-semibold">
+                      <div className="text-emerald-700 font-bold">
                         {formatKcal(sh.shareKcal)}
                       </div>
-                      <div className="text-zinc-400 text-[11px] space-y-0.5 pt-1 border-t border-zinc-900">
+                      <div className="text-stone-600 text-[11px] space-y-0.5 pt-1 border-t border-orange-100 font-medium">
                         {sh.allocatedItems.map((it, itIdx) => (
                           <div key={itIdx}>• {it.portionDescription}</div>
                         ))}
@@ -437,11 +434,11 @@ export default function ResultsStepPage() {
             )}
 
             {/* أزرار التأكيد والطباعة */}
-            <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+            <div className="flex items-center justify-between pt-4 border-t border-stone-200">
               <Button
                 variant="ghost"
                 onClick={() => router.push('/plan/budget')}
-                className="text-zinc-400 hover:text-white"
+                className="text-stone-600 hover:text-stone-900 font-bold"
               >
                 <ArrowRight className="w-5 h-5 ml-1.5" />
                 تغيير الميزانية
@@ -451,10 +448,10 @@ export default function ResultsStepPage() {
                 size="xl"
                 onClick={handleConfirmOrder}
                 disabled={!selectedOpt || ordering}
-                className="gap-2.5"
+                className="gap-2.5 px-10 shadow-xl shadow-orange-500/25"
               >
-                <Printer className="w-5 h-5" />
-                <span>{ordering ? 'جاري إنشاء البون...' : 'تأكيد الوجبة وطباعة البون'}</span>
+                <Printer className="w-6 h-6" />
+                <span>{ordering ? 'جاري طباعة البون...' : 'تأكيد الوجبة وطباعة البون 🧾'}</span>
               </Button>
             </div>
           </div>

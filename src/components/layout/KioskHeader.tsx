@@ -11,9 +11,9 @@ export function KioskHeader() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <header className="no-print sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+    <header className="no-print sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-orange-100 shadow-sm px-4 sm:px-8 py-3.5 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3 group">
-        <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-zinc-800 bg-black flex items-center justify-center p-1 shadow-md group-hover:border-[#F37A20] transition-colors">
+        <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-orange-200 bg-white flex items-center justify-center p-1.5 shadow-sm group-hover:scale-105 transition-transform">
           <Image
             src="/images/fathalla-logo.png"
             alt="Fathalla Market"
@@ -23,16 +23,16 @@ export function KioskHeader() {
           />
         </div>
         <div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-extrabold text-lg text-white tracking-wide">
-              فتح الله
+          <div className="flex items-center gap-2">
+            <span className="font-black text-xl text-stone-900 tracking-tight">
+              فتح الله ماركت
             </span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-[#F37A20] text-black font-black">
-              SMART
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-black shadow-sm">
+              مطعم & وجبات 🍗
             </span>
           </div>
-          <p className="text-xs text-zinc-400 font-medium">
-            Smart Budget · قسم الوجبات الجاهزة
+          <p className="text-xs text-stone-500 font-semibold">
+            قسم الوجبات الجاهزة · Smart Budget ⚡
           </p>
         </div>
       </Link>
@@ -40,9 +40,9 @@ export function KioskHeader() {
       <div className="flex items-center gap-3">
         {cartCount > 0 && (
           <Link href="/menu">
-            <Button variant="secondary" size="sm" className="relative">
+            <Button variant="secondary" size="sm" className="relative shadow-sm bg-orange-50 text-orange-900 border-orange-200">
               <ShoppingBag className="w-4 h-4 text-[#F37A20]" />
-              <span>السلة ({cartCount})</span>
+              <span className="font-bold">السلة ({cartCount})</span>
             </Button>
           </Link>
         )}
@@ -52,7 +52,7 @@ export function KioskHeader() {
             variant="ghost"
             size="sm"
             onClick={resetKiosk}
-            className="text-zinc-400 hover:text-white"
+            className="text-stone-500 hover:text-stone-900 hover:bg-orange-50/80 font-bold"
           >
             <RotateCcw className="w-4 h-4 ml-1.5" />
             بدء من جديد

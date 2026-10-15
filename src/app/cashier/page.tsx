@@ -11,6 +11,7 @@ import {
   RotateCcw,
   LogOut,
   Flame,
+  Utensils,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -52,7 +53,6 @@ export default function CashierPage() {
 
   useEffect(() => {
     loadOrders();
-    // تحديث دوري تلقائي كل 5 ثوانٍ لظهور الطلبات الجديدة فور صدورها من الكيوسك
     const interval = setInterval(() => {
       loadOrders();
     }, 5000);
@@ -65,13 +65,11 @@ export default function CashierPage() {
     setMessage('');
     try {
       const supabase = createClient();
-      // محاولة عبر RPC أولاً
       const { error: rpcError } = await supabase.rpc('mark_order_as_paid', {
         p_order_id: orderId,
       });
 
       if (rpcError) {
-        // تحديث مباشر في جدول orders
         await supabase
           .from('orders')
           .update({ status: 'paid', paid_at: new Date().toISOString() })
@@ -79,12 +77,14 @@ export default function CashierPage() {
       }
 
       await loadOrders();
-      setMessage(`تم تأكيد دفع الطلب بنجاح!`);
+      setMessage(`تم تأكيد دفع واستلام الطلب بنجاح!`);
+      setTimeout(() => setMessage(''), 4000);
     } catch {
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: 'paid', paid_at: new Date().toISOString() } : o))
       );
       setMessage(`تم تأكيد دفع الطلب!`);
+      setTimeout(() => setMessage(''), 4000);
     } finally {
       setProcessingId(null);
     }
@@ -106,21 +106,26 @@ export default function CashierPage() {
   const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col p-4 sm:p-8 space-y-6">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col p-4 sm:p-8 space-y-6">
       {/* الرأس */}
-      <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      <header className="flex items-center justify-between border-b border-orange-200/80 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-[#F37A20]/15 text-[#F37A20]">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-red-600 to-orange-500 text-white shadow-md shadow-orange-500/20">
             <CreditCard className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">شاشة كاشير فتح الله ماركت</h1>
-            <p className="text-xs text-zinc-400">تأكيد دفع واستلام بونات الوجبات الجاهزة</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-black text-stone-900">شاشة كاشير فتح الله ماركت</h1>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-black">
+                POS Terminal
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 font-semibold">تأكيد دفع واستلام بونات الوجبات الجاهزة بالمطعم</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={loadOrders}>
+        <div className="flex items-center gap-2.5">
+          <Button variant="ghost" size="sm" onClick={loadOrders} className="bg-white hover:bg-stone-100 border border-stone-200 shadow-sm text-stone-700 font-bold">
             <RotateCcw className="w-4 h-4 ml-1.5" />
             تحديث
           </Button>
@@ -128,7 +133,7 @@ export default function CashierPage() {
             variant="ghost"
             size="sm"
             onClick={() => router.push('/')}
-            className="text-red-400 hover:text-red-300"
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 bg-white border border-red-200 shadow-sm font-bold"
           >
             <LogOut className="w-4 h-4 ml-1.5" />
             الخروج للكيوسك
@@ -143,19 +148,19 @@ export default function CashierPage() {
             placeholder="امسح الباركود بالكاميرا أو اكتب رقم الأوردر / الـ ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 text-lg font-bold"
+            className="pl-12 text-lg font-bold bg-white border-2 border-orange-200 focus:border-red-500 shadow-sm"
           />
-          <QrCode className="w-6 h-6 text-[#F37A20] absolute left-4 top-4 pointer-events-none" />
+          <QrCode className="w-6 h-6 text-orange-600 absolute left-4 top-4 pointer-events-none" />
         </div>
 
         {/* فلاتر الحالات: الكل - المؤكدة (المدفوعة) - قيد الانتظار */}
-        <div className="flex items-center justify-center gap-2 p-1.5 rounded-2xl bg-zinc-900 border border-zinc-800">
+        <div className="flex items-center justify-center gap-2 p-1.5 rounded-2xl bg-white border border-stone-200 shadow-sm">
           <button
             onClick={() => setStatusFilter('all')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer ${
               statusFilter === 'all'
-                ? 'bg-zinc-800 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
+                ? 'bg-gradient-to-r from-stone-800 to-stone-900 text-white shadow-sm'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
             جميع الطلبات ({orders.length})
@@ -163,35 +168,35 @@ export default function CashierPage() {
 
           <button
             onClick={() => setStatusFilter('paid')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               statusFilter === 'paid'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
-                : 'text-zinc-400 hover:text-emerald-400'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-stone-600 hover:text-emerald-700'
             }`}
           >
             <span>المؤكدة والمدفوعة ✓</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
               {paidCount}
             </span>
           </button>
 
           <button
             onClick={() => setStatusFilter('pending')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               statusFilter === 'pending'
-                ? 'bg-[#F37A20]/20 text-[#F37A20] border border-[#F37A20]/30 shadow-sm'
-                : 'text-zinc-400 hover:text-[#F37A20]'
+                ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-sm'
+                : 'text-stone-600 hover:text-orange-700'
             }`}
           >
             <span>في انتظار الدفع</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#F37A20]/20">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
               {pendingCount}
             </span>
           </button>
         </div>
 
         {message && (
-          <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold text-center">
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black text-center shadow-sm animate-in fade-in">
             {message}
           </div>
         )}
@@ -199,47 +204,47 @@ export default function CashierPage() {
 
       {/* قائمة الطلبات */}
       <div className="max-w-4xl mx-auto w-full space-y-4">
-        <div className="flex items-center justify-between text-sm text-zinc-400">
+        <div className="flex items-center justify-between text-sm text-stone-600 font-bold">
           <span>
             {statusFilter === 'paid'
               ? 'الطلبات المؤكدة والمدفوعة:'
               : statusFilter === 'pending'
-              ? 'الطلبات في انتظار الدفع:'
-              : 'أحدث الطلبات المستلمة:'}
+              ? 'الطلبات في انتظار الدفع واستلام الوجبة:'
+              : 'أحدث الطلبات المستلمة من الكيوسك:'}
           </span>
-          <span>{filteredOrders.length} طلب</span>
+          <span className="text-orange-700 font-black">{filteredOrders.length} طلب</span>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-zinc-500">جاري تحميل الطلبات...</div>
+          <div className="p-12 text-center text-stone-500 font-bold">جاري تحميل أحدث الطلبات...</div>
         ) : filteredOrders.length === 0 ? (
-          <div className="p-12 text-center text-zinc-500 bg-zinc-900 rounded-3xl border border-zinc-800">
-            لا توجد طلبات مطابقة للبحث
+          <div className="p-12 text-center text-stone-500 bg-white rounded-3xl border border-stone-200 shadow-sm font-bold">
+            لا توجد طلبات مطابقة للبحث حالياً
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {filteredOrders.map((ord) => (
               <div
                 key={ord.id}
-                className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between flex-wrap gap-4"
+                className="p-5 rounded-3xl bg-white border border-orange-100 hover:border-orange-300 transition-all shadow-sm hover:shadow-md flex items-center justify-between flex-wrap gap-4"
               >
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-black text-white">
-                      طلب #{ord.order_number}
+                    <span className="text-lg font-black text-stone-900">
+                      بون استلام #{ord.order_number}
                     </span>
                     <Badge variant={ord.status === 'paid' ? 'success' : 'warning'}>
                       {ord.status === 'paid' ? 'تم الدفع والاستلام ✓' : 'في انتظار الدفع'}
                     </Badge>
-                    <span className="text-xs text-zinc-500">
-                      ({ord.order_mode === 'smart_budget' ? 'حساب ذكي' : 'طلب سريع'})
+                    <span className="text-xs text-stone-500 font-bold">
+                      ({ord.order_mode === 'smart_budget' ? 'حساب ذكي ⚡' : 'طلب سريع مباشر 🍔'})
                     </span>
                   </div>
 
-                  <div className="text-xs text-zinc-400 flex items-center gap-3">
+                  <div className="text-xs text-stone-500 flex items-center gap-3 font-semibold">
                     <span>{formatDateTime(ord.created_at)}</span>
                     <span>•</span>
-                    <span className="text-emerald-400 font-semibold">
+                    <span className="text-emerald-700 font-bold">
                       {formatKcal(ord.total_kcal)}
                     </span>
                     <span>•</span>
@@ -249,8 +254,8 @@ export default function CashierPage() {
 
                 <div className="flex items-center gap-4">
                   <div className="text-left">
-                    <div className="text-xs text-zinc-400">المطلوب سداده:</div>
-                    <div className="text-xl font-black text-[#F37A20]">
+                    <div className="text-xs text-stone-500 font-bold">المطلوب سداده:</div>
+                    <div className="text-2xl font-black text-red-600">
                       {formatEgp(ord.total_price)}
                     </div>
                   </div>
@@ -259,14 +264,14 @@ export default function CashierPage() {
                     <Button
                       onClick={() => handleMarkAsPaid(ord.id)}
                       disabled={processingId === ord.id}
-                      className="gap-2"
+                      className="gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      <span>{processingId === ord.id ? 'جاري التأكيد...' : 'تأكيد الدفع'}</span>
+                      <span>{processingId === ord.id ? 'جاري التأكيد...' : 'تأكيد الدفع والاستلام'}</span>
                     </Button>
                   ) : (
-                    <span className="text-xs font-bold text-emerald-400 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      مدفوع
+                    <span className="text-xs font-black text-emerald-700 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                      مدفوع ومسلم ✓
                     </span>
                   )}
                 </div>

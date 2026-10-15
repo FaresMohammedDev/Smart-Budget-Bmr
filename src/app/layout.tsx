@@ -24,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`}>
-      <body className="min-h-full bg-zinc-950 text-zinc-100 font-sans selection:bg-[#F37A20] selection:text-white flex flex-col">
+      <body className="min-h-full bg-[#FAF7F2] text-stone-800 font-sans selection:bg-[#F37A20] selection:text-white flex flex-col">
         <QueryProvider>
           {children}
         </QueryProvider>

@@ -406,21 +406,21 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col p-4 sm:p-8 space-y-8">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-800 flex flex-col p-4 sm:p-8 space-y-8">
       {/* الرأس */}
-      <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      <header className="flex items-center justify-between border-b border-orange-200/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white">لوحة تحكم فتح الله ماركت</h1>
-            <Badge variant="special">Admin Portal</Badge>
+            <h1 className="text-2xl font-black text-stone-900">لوحة تحكم مطبخ وإدارة فتح الله</h1>
+            <Badge variant="special">Admin & Kitchen</Badge>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-stone-500 mt-1">
             إدارة المنيو، إحصائيات المبيعات، والتحكم الفوري في توافر الوجبات بالمطبخ
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={loadAdminData}>
+          <Button variant="secondary" size="sm" onClick={loadAdminData}>
             <RotateCcw className="w-4 h-4 ml-1.5" />
             تحديث
           </Button>
@@ -429,7 +429,7 @@ export default function AdminDashboardPage() {
             variant="ghost"
             size="sm"
             onClick={() => router.push('/')}
-            className="text-zinc-400 hover:text-white"
+            className="text-stone-500 hover:text-red-600"
           >
             <LogOut className="w-4 h-4 ml-1.5" />
             الرجوع للكيوسك
@@ -439,56 +439,56 @@ export default function AdminDashboardPage() {
 
       {/* كروت الإحصائيات (KPIs) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-stone-500 text-xs">
             <span>إجمالي الطلبات</span>
             <ShoppingBag className="w-4 h-4 text-[#F37A20]" />
           </div>
-          <div className="text-2xl font-black text-white">{stats.totalOrders} طلب</div>
-          <div className="text-[11px] text-emerald-400">
+          <div className="text-2xl font-black text-stone-900">{stats.totalOrders} طلب</div>
+          <div className="text-[11px] text-emerald-600 font-semibold">
             {stats.paidOrders > 0 ? `منها ${stats.paidOrders} مكتمل ومدفوع` : 'لا توجد طلبات مدفوعة بعد'}
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-stone-500 text-xs">
             <span>إجمالي الإيرادات</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <DollarSign className="w-4 h-4 text-emerald-600" />
           </div>
-          <div className="text-2xl font-black text-white">{formatEgp(stats.totalRevenue)}</div>
-          <div className="text-[11px] text-zinc-400">
+          <div className="text-2xl font-black text-stone-900">{formatEgp(stats.totalRevenue)}</div>
+          <div className="text-[11px] text-stone-500">
             متوسط الطلب: {stats.totalOrders > 0 ? formatEgp(Math.round(stats.totalRevenue / stats.totalOrders)) : '0 ج.م'}
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-stone-500 text-xs">
             <span>الوجبات المتوفرة</span>
             <Flame className="w-4 h-4 text-[#F37A20]" />
           </div>
-          <div className="text-2xl font-black text-white">
+          <div className="text-2xl font-black text-stone-900">
             {meals.filter((m) => m.is_available).length} من {meals.length}
           </div>
-          <div className="text-[11px] text-amber-400">
+          <div className="text-[11px] text-amber-600 font-semibold">
             {meals.filter((m) => !m.is_available).length} صنف غير متوفر حالياً
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
-          <div className="flex items-center justify-between text-zinc-400 text-xs">
+        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
+          <div className="flex items-center justify-between text-stone-500 text-xs">
             <span>عروض قرب الصلاحية</span>
             <Sparkles className="w-4 h-4 text-[#F37A20]" />
           </div>
           <div className="text-2xl font-black text-[#F37A20]">
             {meals.filter((m) => m.is_expiring_soon).length} وجبات
           </div>
-          <div className="text-[11px] text-zinc-400">تظهر في صدارة الترشيحات بالكيوسك</div>
+          <div className="text-[11px] text-stone-500">تظهر في صدارة الترشيحات بالكيوسك</div>
         </div>
       </div>
 
       {/* الوجبات الأكثر طلباً (Top Selling) */}
-      <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-4">
-        <div className="flex items-center gap-2 font-bold text-base text-zinc-200">
+      <div className="p-6 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 font-bold text-base text-stone-800">
           <TrendingUp className="w-5 h-5 text-[#F37A20]" />
           <span>الأكثر طلباً ومبيعاً (Top Selling):</span>
         </div>
@@ -498,29 +498,29 @@ export default function AdminDashboardPage() {
             {stats.topSelling.map((ts, idx) => (
               <div
                 key={idx}
-                className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs"
+                className="p-3.5 rounded-2xl bg-[#FFFBF7] border border-orange-100 flex items-center justify-between text-xs"
               >
                 <div>
-                  <div className="font-bold text-white">{ts.name}</div>
-                  <div className="text-zinc-400 mt-0.5">{ts.sales} وجبة بيعت</div>
+                  <div className="font-bold text-stone-900">{ts.name}</div>
+                  <div className="text-stone-500 mt-0.5">{ts.sales} وجبة بيعت</div>
                 </div>
-                <div className="text-emerald-400 font-black">{formatEgp(ts.revenue)}</div>
+                <div className="text-emerald-600 font-black">{formatEgp(ts.revenue)}</div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="p-6 rounded-2xl bg-zinc-950/60 border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
+          <div className="p-6 rounded-2xl bg-orange-50/40 border border-dashed border-orange-200 text-center text-xs text-stone-500">
             لا توجد مبيعات مسجلة حتى الآن — يتم حساب الوجبات الأكثر مبيعاً والأعلى إيراداً تلقائياً بمجرد إتمام الطلبات في الكاشير.
           </div>
         )}
       </div>
 
       {/* جدول إدارة الوجبات والتحكم الفوري */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-zinc-900 border border-zinc-800 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-zinc-800 pb-4">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-orange-100 pb-4">
           <div>
-            <h2 className="text-xl font-bold text-white">إدارة وجبات المطبخ والمنيو</h2>
-            <p className="text-xs text-zinc-400">
+            <h2 className="text-xl font-bold text-stone-900">إدارة وجبات المطبخ والمنيو</h2>
+            <p className="text-xs text-stone-500">
               تحكم في توافر أي وجبة عند نفادها، أو فعّل شارة عرض التوفير للوجبات التي قاربت الصلاحية
             </p>
           </div>
@@ -532,12 +532,12 @@ export default function AdminDashboardPage() {
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-zinc-500">جاري تحميل الوجبات...</div>
+          <div className="p-12 text-center text-stone-400">جاري تحميل الوجبات...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-right text-sm">
               <thead>
-                <tr className="text-xs text-zinc-400 border-b border-zinc-800 pb-2">
+                <tr className="text-xs text-stone-500 border-b border-orange-100 pb-2">
                   <th className="pb-3 font-semibold">الوجبة</th>
                   <th className="pb-3 font-semibold">السعر</th>
                   <th className="pb-3 font-semibold">السعرات</th>
@@ -547,11 +547,11 @@ export default function AdminDashboardPage() {
                   <th className="pb-3 font-semibold text-center">إجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-orange-100">
                 {meals.map((meal) => (
-                  <tr key={meal.id} className="hover:bg-zinc-800/30 transition-colors">
+                  <tr key={meal.id} className="hover:bg-orange-50/50 transition-colors">
                     <td className="py-3.5 flex items-center gap-3">
-                      <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
+                      <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
                         <Image
                           src={meal.image_url || '/images/fathalla-logo.png'}
                           alt={meal.name_ar}
@@ -561,27 +561,27 @@ export default function AdminDashboardPage() {
                         />
                       </div>
                       <div>
-                        <div className="font-bold text-white">{meal.name_ar}</div>
-                        <div className="text-xs text-zinc-400">{meal.name_en}</div>
+                        <div className="font-bold text-stone-900">{meal.name_ar}</div>
+                        <div className="text-xs text-stone-400">{meal.name_en}</div>
                       </div>
                     </td>
 
                     <td className="py-3.5">
                       {meal.discount_price ? (
                         <div>
-                          <div className="font-bold text-white">{formatEgp(meal.discount_price)}</div>
-                          <div className="text-xs text-zinc-500 line-through">{formatEgp(meal.price)}</div>
+                          <div className="font-bold text-stone-900">{formatEgp(meal.discount_price)}</div>
+                          <div className="text-xs text-stone-400 line-through">{formatEgp(meal.price)}</div>
                         </div>
                       ) : (
-                        <div className="font-bold text-white">{formatEgp(meal.price)}</div>
+                        <div className="font-bold text-stone-900">{formatEgp(meal.price)}</div>
                       )}
                     </td>
 
-                    <td className="py-3.5 text-zinc-300">
+                    <td className="py-3.5 text-stone-600 font-medium">
                       {formatKcal(meal.total_kcal)}
                     </td>
 
-                    <td className="py-3.5 text-xs text-zinc-400">
+                    <td className="py-3.5 text-xs text-stone-500">
                       {meal.portion_type === 'shareable' ? 'تشاركي' : 'فردي'} ({meal.kind})
                     </td>
 
@@ -591,8 +591,8 @@ export default function AdminDashboardPage() {
                         onClick={() => handleToggleExpiringSoon(meal.id, meal.is_expiring_soon)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           meal.is_expiring_soon
-                            ? 'bg-[#F37A20]/20 text-[#F37A20] border border-[#F37A20]/40 shadow-sm'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                            ? 'bg-orange-100 text-[#F37A20] border border-orange-300 shadow-sm'
+                            : 'bg-stone-100 text-stone-400 hover:text-stone-700'
                         }`}
                       >
                         {meal.is_expiring_soon ? 'مُفعّل كعرض توفير ⭐' : 'عادي'}
@@ -605,8 +605,8 @@ export default function AdminDashboardPage() {
                         onClick={() => handleToggleAvailability(meal.id, meal.is_available)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           meal.is_available
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                            : 'bg-red-500/20 text-red-400 border border-red-500/40'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                            : 'bg-red-50 text-red-700 border border-red-300'
                         }`}
                       >
                         {meal.is_available ? 'متوفر بالمطبخ ✓' : 'غير متوفر (نافد) ✕'}
@@ -619,7 +619,7 @@ export default function AdminDashboardPage() {
                         <button
                           onClick={() => setEditingMeal({ ...meal })}
                           title="تعديل الوجبة"
-                          className="p-2 rounded-xl bg-zinc-800/80 hover:bg-[#F37A20]/20 text-zinc-300 hover:text-[#F37A20] transition-colors cursor-pointer"
+                          className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-stone-700 hover:text-[#F37A20] transition-colors cursor-pointer border border-orange-100"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -627,7 +627,7 @@ export default function AdminDashboardPage() {
                           onClick={() => handleDeleteMeal(meal.id)}
                           disabled={deletingId === meal.id}
                           title="حذف الوجبة"
-                          className="p-2 rounded-xl bg-zinc-800/80 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 transition-colors cursor-pointer"
+                          className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer border border-red-100"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -643,16 +643,16 @@ export default function AdminDashboardPage() {
 
       {/* نافذة إضافة وجبة جديدة (Modal) */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-orange-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowAddModal(false)}
-              className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
+              className="absolute top-5 left-5 text-stone-400 hover:text-stone-700 p-1.5 rounded-xl bg-stone-100"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-bold text-white mb-4">إضافة وجبة جديدة للمنيو</h3>
+            <h3 className="text-xl font-bold text-stone-900 mb-4">إضافة وجبة جديدة للمنيو</h3>
 
             <form onSubmit={handleCreateMeal} className="space-y-4">
               <Input
@@ -702,11 +702,11 @@ export default function AdminDashboardPage() {
                 />
 
                 <div className="space-y-1.5 text-right">
-                  <label className="block text-sm font-semibold text-zinc-300">النوع</label>
+                  <label className="block text-sm font-semibold text-stone-700">النوع</label>
                   <select
                     value={newMeal.kind}
                     onChange={(e) => setNewMeal({ ...newMeal, kind: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-100 text-sm"
+                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
                   >
                     <option value="main">رئيسي</option>
                     <option value="side">جانبي</option>
@@ -717,11 +717,11 @@ export default function AdminDashboardPage() {
 
               {/* رفع الصورة أو استخدام Placeholder نظيف */}
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-zinc-300">
+                <label className="block text-sm font-semibold text-stone-700">
                   صورة الوجبة (رفع صورة أو استخدام الافتراضية)
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
                     <Image
                       src={newMeal.image_url || '/images/fathalla-logo.png'}
                       alt="Preview"
@@ -730,7 +730,7 @@ export default function AdminDashboardPage() {
                       className="object-cover"
                     />
                   </div>
-                  <label className="flex-1 border-2 border-dashed border-zinc-700 hover:border-[#F37A20] rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-zinc-400 flex items-center justify-center gap-2">
+                  <label className="flex-1 border-2 border-dashed border-orange-200 hover:border-[#F37A20] bg-orange-50/40 rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-stone-600 flex items-center justify-center gap-2">
                     <Upload className="w-4 h-4 text-[#F37A20]" />
                     <span>{uploadingImage ? 'جاري الرفع...' : 'رفع صورة من الجهاز'}</span>
                     <input
@@ -751,15 +751,15 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
-              <label className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 cursor-pointer">
+              <label className="flex items-center gap-3 p-3.5 rounded-xl bg-orange-50/60 border border-orange-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={newMeal.is_expiring_soon}
                   onChange={(e) => setNewMeal({ ...newMeal, is_expiring_soon: e.target.checked })}
                   className="w-4 h-4 accent-[#F37A20]"
                 />
-                <span className="text-xs text-zinc-300 font-bold">
-                  تحديد كوجبة قربت صلاحيتها (عرض توفير طازج يتصدر الترشيحات بالكيوسك)
+                <span className="text-xs text-stone-700 font-bold">
+                  تحديد كوجبة قربت صلاحيتها (عرض توفير طازج يتصدر الترشيحات بالكيوسك ⭐)
                 </span>
               </label>
 
@@ -773,16 +773,16 @@ export default function AdminDashboardPage() {
 
       {/* نافذة تعديل وجبة موجودة (Edit Modal) */}
       {editingMeal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-orange-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setEditingMeal(null)}
-              className="absolute top-5 left-5 text-zinc-400 hover:text-white p-1 rounded-lg bg-zinc-800/60"
+              className="absolute top-5 left-5 text-stone-400 hover:text-stone-700 p-1.5 rounded-xl bg-stone-100"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-bold text-white mb-4">تعديل بيانات الوجبة</h3>
+            <h3 className="text-xl font-bold text-stone-900 mb-4">تعديل بيانات الوجبة</h3>
 
             <form onSubmit={handleUpdateMeal} className="space-y-4">
               <Input
@@ -832,13 +832,13 @@ export default function AdminDashboardPage() {
                 />
 
                 <div className="space-y-1.5 text-right">
-                  <label className="block text-sm font-semibold text-zinc-300">النوع</label>
+                  <label className="block text-sm font-semibold text-stone-700">النوع</label>
                   <select
                     value={editingMeal.kind}
                     onChange={(e) =>
                       setEditingMeal({ ...editingMeal, kind: e.target.value as any })
                     }
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-100 text-sm"
+                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
                   >
                     <option value="main">رئيسي</option>
                     <option value="side">جانبي</option>
@@ -848,13 +848,13 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-semibold text-zinc-300">نوع التقديم</label>
+                <label className="block text-sm font-semibold text-stone-700">نوع التقديم</label>
                 <select
                   value={editingMeal.portion_type}
                   onChange={(e) =>
                     setEditingMeal({ ...editingMeal, portion_type: e.target.value as any })
                   }
-                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-100 text-sm"
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
                 >
                   <option value="individual">فردي (وجبة لشخص)</option>
                   <option value="shareable">تشاركي (صواني عائلية)</option>
@@ -863,11 +863,11 @@ export default function AdminDashboardPage() {
 
               {/* تعديل أو رفع صورة الوجبة */}
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-zinc-300">
+                <label className="block text-sm font-semibold text-stone-700">
                   صورة الوجبة (رفع صورة جديدة أو تغيير الرابط)
                 </label>
                 <div className="flex items-center gap-3">
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-black border border-zinc-800 flex-shrink-0">
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
                     <Image
                       src={editingMeal.image_url || '/images/fathalla-logo.png'}
                       alt="Preview"
@@ -876,7 +876,7 @@ export default function AdminDashboardPage() {
                       className="object-cover"
                     />
                   </div>
-                  <label className="flex-1 border-2 border-dashed border-zinc-700 hover:border-[#F37A20] rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-zinc-400 flex items-center justify-center gap-2">
+                  <label className="flex-1 border-2 border-dashed border-orange-200 hover:border-[#F37A20] bg-orange-50/40 rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-stone-600 flex items-center justify-center gap-2">
                     <Upload className="w-4 h-4 text-[#F37A20]" />
                     <span>{uploadingEditImage ? 'جاري الرفع...' : 'رفع صورة جديدة من الجهاز'}</span>
                     <input
@@ -899,7 +899,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
-              <label className="flex items-center gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 cursor-pointer">
+              <label className="flex items-center gap-3 p-3.5 rounded-xl bg-orange-50/60 border border-orange-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={editingMeal.is_expiring_soon}
@@ -908,7 +908,7 @@ export default function AdminDashboardPage() {
                   }
                   className="w-4 h-4 accent-[#F37A20]"
                 />
-                <span className="text-xs text-zinc-300 font-bold">
+                <span className="text-xs text-stone-700 font-bold">
                   تحديد كوجبة قربت صلاحيتها (عرض توفير طازج ⭐)
                 </span>
               </label>

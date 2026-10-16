@@ -377,9 +377,41 @@ graph TD
 
 ---
 
-## 4.3 نظام الأيقونات والرموز البصرية (Iconography System)
-* **المكتبة:** `lucide-react` مع استخدام سمك خط **2.25px إلى 2.5px** لضمان الظهور الواضح على الشاشات الكبيرة.
-* **أيقونات الطعام الحية (Food Emoji Anchors):** دمج الإيموجي عالي الجودة مع العناوين لإضفاء طابع بصري فوري وسهل الفهم لجميع الأعمار (مثل: 🍗 للمشويات، 🍟 للبطاطس، 🥤 للمشروبات، 🍳 للإفطار، ⚡ للذكاء والتوفير).
+## 4.3 ميثاق الأيقونات الموحد والحظر الصارم للإيموجيز (Pure SVG Iconography & No-Emoji Policy)
+
+> [!IMPORTANT]
+> **قرار تصميمي ملزم (Design Mandate):** يُحظر تماماً استخدام الرموز التعبيرية الشعبية (System Emojis مثل: 🍗, 🍔, 🏃‍♂️, 💃, ⚡, ⭐, 🎉, 🧾) في أي جزء من واجهات التطبيق، ويتم استبدالها بنسبة 100% بأيقونات متجهة نقية (Crisp Scalable SVG Icons) من مكتبة `lucide-react` داخل حاويات بصرية أنيقة (Badge Containers).
+
+### لماذا تم حظر الإيموجيز بشكل قاطع؟ (The Engineering & Aesthetic Rationale)
+1. **التباين الفوضوي بين أنظمة التشغيل (OS Inconsistency):** 
+   - الإيموجي الواحد يظهر برسم وشكل مختلف تماماً بين ويندوز (Segoe UI Emoji المسطحة الباهتة)، وأندرويد، وiOS، وشاشات لينكس في الكيوسك، مما يكسر الاتساق البصري للنظام.
+2. **انطباع المحادثات الهاوية (Casual Chat Vibe):**
+   - استخدام الإيموجيز في أزرار الدفع والميزانية يعطي اللجنة انطباعاً بأن التطبيق "شات بوت واتساب" أو موقع ترفيهي بسيط، وليس نظاماً تجارياً حقيقياً (Enterprise Point-of-Sale). ماكدونالدز وبوفالو برجر لا يضعان إيموجيز في شاشاتهم الرسمية بل أيقونات احترافية فائقة الدقة.
+3. **التحكم الهندسي الكامل في الألوان والسماكة (Color Tokenization):**
+   - أيقونات الـ SVG يمكن تلوينها برمجياً لتعكس حالات التفاعل (`hover`, `active`, `focus`) مع التحكم في سمك الخط (`strokeWidth={2.25}`)، وتضمينها داخل دوائر خلفية بألوان الهوية المعتمدة.
+
+---
+
+### جدول الاستبدال الشامل للإيموجيز بأيقونات SVG الاحترافية:
+
+| الاستخدام الوظيفي في التطبيق | الإيموجي القديم (ممنوع ❌) | أيقونة Lucide البديلة (معتمد ✅) | كود التضمين البرمجي (Tailwind & React) |
+| :--- | :---: | :--- | :--- |
+| **فئة شاب / رياضي** | 🏃‍♂️ | `<UserCheck />` | `<UserCheck className="w-5 h-5 text-orange-600" strokeWidth={2.25} />` |
+| **فئة شابة / سيدة** | 💃 | `<Sparkles />` | `<Sparkles className="w-5 h-5 text-rose-600" strokeWidth={2.25} />` |
+| **فئة طفل / صغير** | 👦 | `<Smile />` أو `<Baby />` | `<Smile className="w-5 h-5 text-amber-600" strokeWidth={2.25} />` |
+| **فئة كبار السن** | 👴 | `<Shield />` أو `<Heart />` | `<Heart className="w-5 h-5 text-red-600" strokeWidth={2.25} />` |
+| **وجبة الإفطار** | 🍳 | `<SunMedium />` | `<SunMedium className="w-5 h-5 text-amber-500" strokeWidth={2.25} />` |
+| **وجبة الغداء الرئيسية** | 🍗 | `<UtensilsCrossed />` | `<UtensilsCrossed className="w-5 h-5 text-red-600" strokeWidth={2.25} />` |
+| **وجبة العشاء** | 🥪 | `<Moon />` | `<Moon className="w-5 h-5 text-orange-600" strokeWidth={2.25} />` |
+| **سناك خفيف** | 🥗 | `<Apple />` أو `<Salad />` | `<Apple className="w-5 h-5 text-emerald-600" strokeWidth={2.25} />` |
+| **الميزانية والفلوس** | 💰 / 💵 | `<Wallet />` | `<Wallet className="w-5 h-5 text-orange-600" strokeWidth={2.25} />` |
+| **السعرات والحرارة** | 🔥 | `<Flame />` | `<Flame className="w-5 h-5 text-red-600" strokeWidth={2.25} />` |
+| **الحساب الذكي والتوفير** | ⚡ | `<Zap />` | `<Zap className="w-5 h-5 text-orange-500" strokeWidth={2.25} />` |
+| **عرض خاص / قرب الصلاحية** | ⭐ | `<Percent />` أو `<Tag />` | `<Tag className="w-4 h-4 text-red-600" strokeWidth={2.25} />` |
+| **بون الاستلام والفاتورة** | 🧾 | `<Receipt />` | `<Receipt className="w-5 h-5 text-stone-800" strokeWidth={2.25} />` |
+| **أصناف الساندوتشات** | 🍔 / 🌯 | `<Sandwich />` | `<Sandwich className="w-5 h-5 text-orange-600" strokeWidth={2.25} />` |
+| **المشروبات والعصائر** | 🥤 | `<CupSoda />` | `<CupSoda className="w-5 h-5 text-amber-600" strokeWidth={2.25} />` |
+| **التهنئة ونجاح الطلب** | 🎉 | `<CheckCircle2 />` | `<CheckCircle2 className="w-10 h-10 text-emerald-600" strokeWidth={2.5} />` |
 
 ---
 

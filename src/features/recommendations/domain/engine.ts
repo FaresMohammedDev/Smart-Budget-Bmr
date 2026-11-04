@@ -5,34 +5,45 @@ import {
   ComboItem,
   RecommendationBadge,
 } from './types';
-import { PersonNutrition } from '../../nutrition/domain/types';
+import { PersonNutrition, MealTime } from '../../nutrition/domain/types';
 import { calculateGroupShares } from './shares';
+import { isMealAppropriateForTime } from '@/lib/meals-data';
 
-interface RecommendParams {
+export interface RecommendParams {
   availableMeals: Meal[];
   targetKcal: number;
   budget: number;
   people?: PersonNutrition[];
+  mealTime?: MealTime;
 }
 
 /**
  * محرك ترشيح الوجبات الذكي لمطعم فتح الله ماركت
  *
  * يراعي:
- * 1. الميزانية كحد أقصى حاسم.
- * 2. السعرات المستهدفة لمنع الهدر والوصول لأقرب قيمة إشباع.
- * 3. تقديم وجبات أوشكت على انتهاء الصلاحية (is_expiring_soon) كعروض توفير خاصة في القمة.
- * 4. معالجة حالات الميزانية المنخفضة (Edge Case) بسلاسة دون أخطاء.
+ * 1. منطقية وقت الوجبة (mealTime): منع التناقضات السخيفة كترشيح مكرونة بشاميل أو صواني عائلية للإفطار!
+ * 2. الميزانية كحد أقصى حاسم.
+ * 3. السعرات المستهدفة لمنع الهدر والوصول لأقرب قيمة إشباع.
+ * 4. دعم الأعداد الكبيرة (أكثر من 6 أفراد: عائلات، مجموعات عمل، عزائم).
+ * 5. تقديم وجبات أوشكت على انتهاء الصلاحية (is_expiring_soon) كعروض توفير خاصة فقط إذا كانت مناسبة لوقت الوجبة.
+ * 6. معالجة حالات الميزانية المنخفضة (Edge Case) بسلاسة.
  */
 export function recommendMeals({
   availableMeals,
   targetKcal,
   budget,
   people = [],
+  mealTime,
 }: RecommendParams): EngineResult {
-  const activeMeals = availableMeals.filter(
-    (m) => m.is_available && m.total_kcal > 0
+  // تصفية الوجبات المتاحة مع مراعاة ملاءمتها لوقت الوجبة منطقياً
+  let activeMeals = availableMeals.filter(
+    (m) => m.is_available && m.total_kcal > 0 && isMealAppropriateForTime(m, mealTime)
   );
+
+  // إذا لم تتوفر وجبات للتوقيت المحدد، نرجع للقائمة العامة المتاحة كأمان
+  if (activeMeals.length === 0) {
+    activeMeals = availableMeals.filter((m) => m.is_available && m.total_kcal > 0);
+  }
 
   // إيجاد أرخص وجبة رئيسية لمعرفة ما إذا كانت الميزانية تكفي
   const mainMeals = activeMeals.filter((m) => m.kind === 'main');
@@ -43,13 +54,13 @@ export function recommendMeals({
   // حالة الميزانية القليلة جداً (Edge Case)
   if (budget < cheapestMealPrice) {
     const sideMeals = activeMeals.filter(
-      (m) => m.kind === 'side' || m.kind === 'drink'
+      (m) => m.kind === 'side' || m.kind === 'drink' || m.kind === 'dessert'
     );
     const affordableSides = sideMeals.filter(
       (m) => (m.discount_price ?? m.price) <= budget
     );
 
-    // تجميع تشكيلة سريعة من الأطباق الجانبية ضمن الميزانية
+    // تجميع تشكيلة سريعة من الأطباق الخفيفة ضمن الميزانية
     const suggestedSides: ComboItem[] = [];
     let currentCost = 0;
     let currentKcal = 0;
@@ -68,7 +79,7 @@ export function recommendMeals({
       budget,
       cheapestMealPrice,
       missingAmount: Math.round((cheapestMealPrice - budget) * 100) / 100,
-      apologyMessageAr: `عفواً، ميزانيتك الحالية (${budget} ج.م) أقل من سعر أقل وجبة رئيسية متوفرة (${cheapestMealPrice} ج.م). نقترح عليك بعض الإضافات الخفيفة على قد ميزانيتك، أو زيادة الميزانية بمقدار ${Math.round(cheapestMealPrice - budget)} ج.م.`,
+      apologyMessageAr: `ميزانيتك الحالية (${budget} ج.م) أقل من سعر وجبة متكاملة لوقت ${mealTime === 'breakfast' ? 'الإفطار' : mealTime === 'lunch' ? 'الغداء' : mealTime === 'dinner' ? 'العشاء' : 'السناك'} (${cheapestMealPrice} ج.م). نقترح عليك بعض الإضافات الخفيفة على قد ميزانيتك، أو زيادة الميزانية بمقدار ${Math.round(cheapestMealPrice - budget)} ج.م.`,
       suggestedSides,
       sidesTotalPrice: currentCost,
       sidesTotalKcal: currentKcal,
@@ -84,15 +95,25 @@ export function recommendMeals({
 
   const peopleCount = Math.max(people.length, 1);
 
-  // 1. توليد خيارات من صنف رئيسي واحد بعدد مناسب
+  // 1. توليد خيارات من صنف رئيسي واحد بعدد مناسب يدعم أعداد كبيرة (1 إلى 30 فرد)
   for (const meal of activeMeals) {
     const unitPrice = meal.discount_price ?? meal.price;
     const maxQty = Math.floor(budget / unitPrice);
 
-    // إذا كانت وجبة فردية، نحاول تقدير كمية قريبة من عدد الأفراد
-    const minQty = meal.portion_type === 'individual' ? Math.min(peopleCount, maxQty) : 1;
+    // إذا كانت وجبة فردية، نحاول تقدير كمية تغطي عدد الأفراد
+    let minQty = 1;
+    if (meal.portion_type === 'individual') {
+      minQty = Math.min(peopleCount, maxQty);
+    } else {
+      // صواني تشاركية: صينية واحدة أو أكثر حسب عدد الأفراد وسعة الصينية
+      const neededTrays = Math.ceil(peopleCount / (meal.servings || 4));
+      minQty = Math.min(neededTrays, maxQty);
+    }
 
-    for (let q = Math.max(1, minQty); q <= Math.min(maxQty, peopleCount * 3, 10); q++) {
+    // سقف الكميات يدعم المجموعات الكبيرة حتى 40 وحدة
+    const upperLimit = Math.min(maxQty, Math.max(peopleCount * 2, 25));
+
+    for (let q = Math.max(1, minQty); q <= upperLimit; q++) {
       const totalPrice = unitPrice * q;
       if (totalPrice <= budget) {
         candidateCombos.push({
@@ -105,23 +126,29 @@ export function recommendMeals({
     }
   }
 
-  // 2. توليد توليفات ثنائية (وجبة رئيسية + صنف جانبي/مشروب)
-  const sides = activeMeals.filter((m) => m.kind === 'side' || m.kind === 'drink');
+  // 2. توليد توليفات ثنائية (وجبة رئيسية + صنف جانبي / مشروب)
+  const sides = activeMeals.filter((m) => m.kind === 'side' || m.kind === 'drink' || m.kind === 'dessert');
   for (const main of mainMeals) {
     const mainPrice = main.discount_price ?? main.price;
     if (mainPrice > budget) continue;
 
+    const mainQuantity = main.portion_type === 'individual' ? peopleCount : Math.ceil(peopleCount / (main.servings || 4));
+    const mainTotalCost = mainPrice * mainQuantity;
+    if (mainTotalCost > budget) continue;
+
     for (const side of sides) {
       const sidePrice = side.discount_price ?? side.price;
-      const combinedPrice = mainPrice * peopleCount + sidePrice * peopleCount;
+      const sideQuantity = side.portion_type === 'individual' ? peopleCount : 1;
+      const combinedPrice = mainTotalCost + sidePrice * sideQuantity;
+
       if (combinedPrice <= budget) {
         candidateCombos.push({
           items: [
-            { meal: main, quantity: peopleCount },
-            { meal: side, quantity: peopleCount },
+            { meal: main, quantity: mainQuantity },
+            { meal: side, quantity: sideQuantity },
           ],
           totalPrice: combinedPrice,
-          totalKcal: (main.total_kcal + side.total_kcal) * peopleCount,
+          totalKcal: main.total_kcal * mainQuantity + side.total_kcal * sideQuantity,
           isExpiringSoon: main.is_expiring_soon || side.is_expiring_soon,
         });
       }
@@ -139,23 +166,26 @@ export function recommendMeals({
     // مكافأة التوفير في السعر
     const budgetRatio = combo.totalPrice / budget;
 
-    // مكافأة كبيرة للوجبات التي قاربت انتهاء الصلاحية لتتصدر المقترحات
-    const expiringBonus = combo.isExpiringSoon ? -2.5 : 0;
+    // مكافأة للوجبات التي قاربت انتهاء الصلاحية فقط إذا كانت مناسبة لوقت الوجبة!
+    const isExpiringBonusAppropriate =
+      combo.isExpiringSoon &&
+      (!mealTime || combo.items.every((i) => isMealAppropriateForTime(i.meal, mealTime)));
+    const expiringBonus = isExpiringBonusAppropriate ? -2.5 : 0;
 
     const score = kcalPenalty + budgetRatio * 0.2 + expiringBonus;
 
     let badge: RecommendationBadge = 'best_fit';
     let title_ar = 'الأنسب لاحتياجك';
 
-    if (combo.isExpiringSoon) {
+    if (isExpiringBonusAppropriate) {
       badge = 'special_offer';
-      title_ar = 'عرض فتح الله التوفيري الطازج ⭐';
+      title_ar = 'عرض فتح الله التوفيري الطازج';
     } else if (combo.totalPrice < budget * 0.7) {
       badge = 'saving';
-      title_ar = 'الخيار الأكثر توفيراً 💰';
+      title_ar = 'الخيار الأكثر توفيراً';
     } else if (combo.totalKcal >= targetKcal * 0.95) {
       badge = 'filling';
-      title_ar = 'وجبة مشبعة ومتكاملة 🍽️';
+      title_ar = 'وجبة مشبعة ومتكاملة';
     }
 
     return {
@@ -187,7 +217,7 @@ export function recommendMeals({
       seenSignatures.add(signature);
       uniqueRecommendations.push(opt);
     }
-    if (uniqueRecommendations.length >= 5) break;
+    if (uniqueRecommendations.length >= 6) break;
   }
 
   // حساب نصيب الأفراد لأفضل ترشيح إذا كانت هناك مجموعة

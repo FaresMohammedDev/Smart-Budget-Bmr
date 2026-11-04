@@ -2,6 +2,8 @@
  * أنواع بيانات الترشيحات والوجبات وتقسيم الحصص
  */
 
+import { MealTime } from '../../nutrition/domain/types';
+
 export type MealKind = 'main' | 'side' | 'drink' | 'dessert';
 export type PortionType = 'individual' | 'shareable';
 
@@ -29,6 +31,7 @@ export interface Meal {
   servings: number;
   image_url: string;
   components?: FoodComponent[];
+  meal_times?: MealTime[];
 }
 
 export interface ComboItem {

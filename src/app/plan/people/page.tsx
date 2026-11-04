@@ -20,10 +20,12 @@ import {
   UserCheck,
   Heart,
   Smile,
+  Zap,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { TouchStepper } from '@/components/ui/TouchStepper';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
 import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
@@ -364,31 +366,48 @@ export default function PeopleStepPage() {
     }
   };
 
+  const handleApplyToAll = () => {
+    const current = people[activeTab];
+    if (!current) return;
+    const updated = people.map((p, idx) => ({
+      ...p,
+      age: current.age,
+      gender: current.gender,
+      heightCm: current.heightCm,
+      weightKg: current.weightKg,
+      activityLevel: current.activityLevel,
+      name: p.name || `فرد ${idx + 1}`,
+    }));
+    setPeople(updated);
+    setStatusMessage(`تم تطبيق البيانات بنجاح على جميع الأفراد (${peopleCount})!`);
+    setTimeout(() => setStatusMessage(''), 4000);
+  };
+
   const handleNext = () => {
     router.push('/plan/budget');
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-8 space-y-6">
         {/* شريط المراحل الملون والواضح */}
-        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b border-orange-200/80 pb-4">
-          <div className="flex items-center gap-2 text-red-600">
-            <span className="w-7 h-7 rounded-full bg-gradient-to-r from-red-600 to-orange-500 text-white flex items-center justify-center font-black text-xs shadow-sm">
+        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b-2 border-[#E7D7C7] pb-4">
+          <div className="flex items-center gap-2 text-[#6B0F1A]">
+            <span className="w-7 h-7 rounded-full bg-[#6B0F1A] text-white flex items-center justify-center font-black text-xs border border-[#3E080F] shadow-xs">
               1
             </span>
-            <span>بيانات الأفراد والحجم</span>
+            <span className="font-black">بيانات الأفراد والحجم</span>
           </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-orange-100" />
+          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-200" />
           <div className="flex items-center gap-2 text-stone-400">
             <span className="w-7 h-7 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs">
               2
             </span>
             <span>الميزانية ونوع الوجبة</span>
           </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-orange-100" />
+          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-200" />
           <div className="flex items-center gap-2 text-stone-400">
             <span className="w-7 h-7 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs">
               3
@@ -415,7 +434,7 @@ export default function PeopleStepPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-stone-600">
-                  مرحباً بك {currentUser.user_metadata?.full_name || currentUser.email} 👋
+                  مرحباً بك {currentUser.user_metadata?.full_name || currentUser.email}
                 </span>
                 <button
                   type="button"
@@ -452,7 +471,7 @@ export default function PeopleStepPage() {
 
                       {isSelected && (
                         <span className="w-4 h-4 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-black">
-                          ✓
+                          <Check className="w-3 h-3 stroke-[2.5]" />
                         </span>
                       )}
 
@@ -493,58 +512,106 @@ export default function PeopleStepPage() {
           </div>
         )}
 
-        {/* كارت اختيار عدد الأفراد */}
-        <div className="p-6 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
+        {/* كارت اختيار عدد الأفراد - يدعم حتى 30 فرداً */}
+        <div className="p-6 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-sm shadow-orange-500/20">
+              <div className="p-3 rounded-2xl bg-[#6B0F1A] text-white shadow-xs">
                 <Users className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-black text-stone-900">كم شخص سيتناول الوجبة؟</h2>
-                <p className="text-xs text-stone-500 font-medium">اختر عدد الأفراد لنحسب حجم الوجبة وتكلفتها بدقة</p>
+                <h2 className="text-xl font-black text-[#1E1210]">كم شخص سيتناول الوجبة؟</h2>
+                <p className="text-xs text-stone-500 font-semibold">
+                  اختر عدد الأفراد (يدعم المجموعات والعائلات والعزائم الكبيرة حتى 30 فرداً)
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* عداد زيادة ونقصان ملموس 3D للوصول لأي عدد */}
+              <div className="flex items-center gap-2 bg-[#F8F4EE] p-1.5 rounded-2xl border-2 border-[#E7D7C7]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (peopleCount > 1) {
+                      const next = peopleCount - 1;
+                      setPeopleCount(next);
+                      setSavedGroupId(null);
+                      if (activeTab >= next) setActiveTab(0);
+                    }
+                  }}
+                  disabled={peopleCount <= 1}
+                  className="w-11 h-11 rounded-xl bg-white text-stone-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 font-black text-xl flex items-center justify-center cursor-pointer"
+                  title="تقليل عدد الأفراد"
+                >
+                  <Minus className="w-4 h-4 stroke-[3]" />
+                </button>
+
+                <div className="text-center px-3 min-w-[70px]">
+                  <span className="text-2xl font-black text-[#1E1210] block leading-none">{peopleCount}</span>
+                  <span className="text-[10px] font-black text-[#854D0E]">
+                    {peopleCount === 1 ? 'فرد' : peopleCount === 2 ? 'فردين' : peopleCount <= 10 ? 'أفراد' : 'فرداً'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (peopleCount < 30) {
+                      const next = peopleCount + 1;
+                      setPeopleCount(next);
+                      setSavedGroupId(null);
+                    }
+                  }}
+                  disabled={peopleCount >= 30}
+                  className="w-11 h-11 rounded-xl bg-[#6B0F1A] text-white disabled:opacity-40 disabled:cursor-not-allowed border-2 border-[#3E080F] shadow-[0_3px_0_0_#3E080F] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 font-black text-xl flex items-center justify-center cursor-pointer"
+                  title="زيادة عدد الأفراد"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                </button>
+              </div>
+
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={handleOpenSaveModal}
-                className="gap-1.5 text-xs py-2 bg-orange-50 text-orange-950 border-orange-200 shadow-none font-bold"
+                className="gap-1.5 text-xs py-2 font-bold"
               >
-                <Bookmark className="w-3.5 h-3.5 text-orange-600" />
+                <Bookmark className="w-3.5 h-3.5 text-[#6B0F1A]" />
                 <span>حفظ المجموعة</span>
               </Button>
+            </div>
+          </div>
 
-              {/* أزرار سريعة للأفراد */}
-              <div className="flex items-center gap-2">
-                {[1, 2, 3, 4, 5, 6].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => {
-                      setPeopleCount(num);
-                      setSavedGroupId(null);
-                      if (activeTab >= num) setActiveTab(0);
-                    }}
-                    className={`w-12 h-12 rounded-2xl font-black text-base transition-all select-none cursor-pointer flex items-center justify-center ${
-                      peopleCount === num
-                        ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md shadow-orange-500/30 scale-105'
-                        : 'bg-stone-100 text-stone-700 hover:bg-orange-50 border border-stone-200'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
+          {/* أزرار سريعة للأفراد بارزة 3D تشمل حتى 15 فرداً بنقرة واحدة */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold text-stone-500 block">اختيار سريع بنقرة واحدة:</span>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => {
+                    setPeopleCount(num);
+                    setSavedGroupId(null);
+                    if (activeTab >= num) setActiveTab(0);
+                  }}
+                  className={`w-11 h-11 shrink-0 rounded-2xl font-black text-sm transition-all select-none cursor-pointer flex items-center justify-center ${
+                    peopleCount === num
+                      ? 'bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-[0_4px_0_0_#3E080F] -translate-y-0.5'
+                      : 'bg-white text-stone-800 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* تبويبات الأفراد لو أكثر من شخص */}
           {peopleCount > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pt-3 border-t border-stone-100 pb-1">
+            <div className="flex items-center gap-2 overflow-x-auto pt-3 border-t-2 border-stone-100 pb-1">
               {people.map((p, idx) => (
                 <button
                   key={idx}
@@ -552,8 +619,8 @@ export default function PeopleStepPage() {
                   onClick={() => setActiveTab(idx)}
                   className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
                     activeTab === idx
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-sm'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      ? 'bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-xs'
+                      : 'bg-[#F8F4EE] text-stone-700 hover:bg-stone-200 border border-stone-300'
                   }`}
                 >
                   {p.name || `فرد ${idx + 1}`}
@@ -565,68 +632,89 @@ export default function PeopleStepPage() {
 
         {/* نموذج بيانات الفرد المحدد */}
         {currentPerson && (
-          <div className="p-6 sm:p-8 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-4 flex-wrap gap-3">
-              <div className="flex items-center gap-2.5 font-black text-lg text-stone-900">
-                <User className="w-5 h-5 text-orange-600" />
+          <div className="p-6 sm:p-8 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b-2 border-stone-100 pb-4 flex-wrap gap-3">
+              <div className="flex items-center gap-2.5 font-black text-lg text-[#1E1210]">
+                <User className="w-5 h-5 text-[#6B0F1A]" />
                 <span>بيانات {currentPerson.name || `الفرد ${activeTab + 1}`}</span>
               </div>
 
               {/* بطاقة الحرق الحي BMR و TDEE */}
-              <div className="flex items-center gap-3 text-xs bg-orange-50/80 px-4 py-2 rounded-2xl border border-orange-200/80">
-                <div className="flex items-center gap-1.5 text-stone-700 font-bold">
-                  <Flame className="w-4 h-4 text-red-600" />
+              <div className="flex items-center gap-3 text-xs bg-[#FAF0F0] px-4 py-2 rounded-2xl border border-[#6B0F1A]/20">
+                <div className="flex items-center gap-1.5 text-stone-800 font-extrabold">
+                  <Flame className="w-4 h-4 text-[#6B0F1A]" />
                   <span>حرق الراحة:</span>
-                  <span className="font-black text-red-600">{liveBmr} سعرة</span>
+                  <span className="font-black text-[#6B0F1A]">{liveBmr} سعرة</span>
                 </div>
-                <div className="h-4 w-px bg-orange-200" />
-                <div className="flex items-center gap-1.5 text-stone-700 font-bold">
+                <div className="h-4 w-px bg-stone-300" />
+                <div className="flex items-center gap-1.5 text-stone-800 font-extrabold">
                   <Activity className="w-4 h-4 text-emerald-600" />
                   <span>احتياج اليوم:</span>
-                  <span className="font-black text-emerald-700">{formatKcal(liveTdee)}</span>
+                  <span className="font-black text-emerald-800">{formatKcal(liveTdee)}</span>
                 </div>
               </div>
             </div>
 
             {/* أزرار سريعة بنقرة واحدة لاختيار الفئة لتسهيل الاستخدام على الكيوسك */}
             <div className="space-y-2">
-              <span className="text-xs font-black text-stone-600 block">
-                ⚡ اختر فئة سريعة بنقرة واحدة (أو عدل يدparam بالأسفل):
+              <span className="text-xs font-black text-stone-700 flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-[#6B0F1A] stroke-[2.25]" />
+                <span>اختر فئة سريعة بنقرة واحدة (أو عدل يدوياً بالأسفل):</span>
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <button
                   type="button"
                   onClick={() => applyPreset('young_man')}
-                  className="p-3 rounded-2xl bg-orange-50 hover:bg-orange-100/80 border border-orange-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <span className="text-lg">🏃‍♂️</span>
+                  <UserCheck className="w-5 h-5 text-[#6B0F1A] stroke-[2.25]" />
                   <span>شاب (متوسط)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => applyPreset('young_woman')}
-                  className="p-3 rounded-2xl bg-rose-50 hover:bg-rose-100/80 border border-rose-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <span className="text-lg">💃</span>
+                  <Sparkles className="w-5 h-5 text-rose-600 stroke-[2.25]" />
                   <span>شابة (متوسط)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => applyPreset('child')}
-                  className="p-3 rounded-2xl bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <span className="text-lg">👦</span>
+                  <Smile className="w-5 h-5 text-amber-600 stroke-[2.25]" />
                   <span>طفل (صغير)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => applyPreset('senior')}
-                  className="p-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-300 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <span className="text-lg">👴</span>
+                  <Heart className="w-5 h-5 text-[#6B0F1A] stroke-[2.25]" />
                   <span>كبار السن</span>
                 </button>
               </div>
+
+              {/* زر توفير الوقت: تطبيق المواصفات على الجميع بنقرة واحدة */}
+              {peopleCount > 1 && (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-[#FEF9EE] border-2 border-[#D97706]/40 mt-3">
+                  <div className="text-xs">
+                    <span className="font-extrabold text-[#854D0E] block">تريد توفير الوقت للمجموعة؟</span>
+                    <span className="text-stone-600 text-[11px]">طبق مواصفات هذا الفرد على باقي الأفراد ({peopleCount - 1}) بنقرة واحدة</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleApplyToAll}
+                    className="shrink-0 text-xs py-1.5 px-3 font-black"
+                  >
+                    <Users className="w-3.5 h-3.5 ml-1" />
+                    <span>تطبيق على الجميع</span>
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
@@ -640,147 +728,68 @@ export default function PeopleStepPage() {
 
               {/* الجنس */}
               <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-bold text-stone-700">الجنس</label>
+                <label className="block text-sm font-black text-[#1E1210]">الجنس</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => updatePerson(activeTab, { gender: 'male' })}
-                    className={`py-3 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    className={`py-3.5 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border-2 ${
                       currentPerson.gender === 'male'
-                        ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md'
-                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                        ? 'bg-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F]'
+                        : 'bg-white text-stone-700 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
                     }`}
                   >
-                    <span>ذكر 👨</span>
+                    <User className="w-4 h-4 stroke-[2.5]" />
+                    <span>ذكر</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => updatePerson(activeTab, { gender: 'female' })}
-                    className={`py-3 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    className={`py-3.5 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border-2 ${
                       currentPerson.gender === 'female'
-                        ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md'
-                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                        ? 'bg-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F]'
+                        : 'bg-white text-stone-700 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
                     }`}
                   >
-                    <span>أنثى 👩</span>
+                    <User className="w-4 h-4 stroke-[2.5]" />
+                    <span>أنثى</span>
                   </button>
                 </div>
               </div>
 
-              {/* العمر مع أزرار + / - للمس السريع */}
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-bold text-stone-700">العمر (بالسنوات)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        age: Math.max(10, (currentPerson.age || 25) - 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={10}
-                    max={100}
-                    value={currentPerson.age || ''}
-                    onChange={(e) => updatePerson(activeTab, { age: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-2xl text-stone-900 text-center font-bold text-lg focus:outline-none focus:border-orange-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        age: Math.min(100, (currentPerson.age || 25) + 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+              {/* العمر مع TouchStepper */}
+              <TouchStepper
+                label="العمر (بالسنوات)"
+                value={currentPerson.age || 25}
+                min={5}
+                max={100}
+                unit="سنة"
+                onChange={(val) => updatePerson(activeTab, { age: val })}
+              />
 
-              {/* الوزن مع أزرار + / - للمس السريع */}
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-bold text-stone-700">الوزن (بالكيلوجرام)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        weightKg: Math.max(30, (currentPerson.weightKg || 70) - 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={30}
-                    max={250}
-                    value={currentPerson.weightKg || ''}
-                    onChange={(e) => updatePerson(activeTab, { weightKg: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-2xl text-stone-900 text-center font-bold text-lg focus:outline-none focus:border-orange-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        weightKg: Math.min(250, (currentPerson.weightKg || 70) + 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+              {/* الوزن مع TouchStepper */}
+              <TouchStepper
+                label="الوزن (بالكيلوجرام)"
+                value={currentPerson.weightKg || 70}
+                min={20}
+                max={250}
+                unit="كجم"
+                onChange={(val) => updatePerson(activeTab, { weightKg: val })}
+              />
 
-              {/* الطول */}
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-bold text-stone-700">الطول (بالسنتيمتر)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        heightCm: Math.max(100, (currentPerson.heightCm || 170) - 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={100}
-                    max={230}
-                    value={currentPerson.heightCm || ''}
-                    onChange={(e) => updatePerson(activeTab, { heightCm: Number(e.target.value) })}
-                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-2xl text-stone-900 text-center font-bold text-lg focus:outline-none focus:border-orange-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updatePerson(activeTab, {
-                        heightCm: Math.min(230, (currentPerson.heightCm || 170) + 1),
-                      })
-                    }
-                    className="w-12 h-12 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center font-black text-lg select-none"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+              {/* الطول مع TouchStepper */}
+              <TouchStepper
+                label="الطول (بالسنتيمتر)"
+                value={currentPerson.heightCm || 170}
+                min={80}
+                max={230}
+                unit="سم"
+                onChange={(val) => updatePerson(activeTab, { heightCm: val })}
+              />
 
-              {/* مستوى النشاط البدني بصور وأسلوب بسيط وممتع */}
+              {/* مستوى النشاط البدني */}
               <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-bold text-stone-700">
+                <label className="block text-sm font-black text-[#1E1210]">
                   الحركة والنشاط اليومي
                 </label>
                 <select
@@ -790,12 +799,12 @@ export default function PeopleStepPage() {
                       activityLevel: e.target.value as ActivityLevel,
                     })
                   }
-                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-2xl text-stone-900 font-bold focus:outline-none focus:border-orange-500 text-sm shadow-sm"
+                  className="w-full px-4 py-3 bg-white border-2 border-[#D6C7B2] rounded-2xl text-[#1E1210] font-bold focus:outline-none focus:border-[#6B0F1A] text-sm shadow-xs"
                 >
-                  <option value="sedentary">🛋️ قليل الحركة / مكتب ومذاكرة</option>
-                  <option value="light">🚶‍♂️ حركة خفيفة / يوم عادي</option>
-                  <option value="moderate">🏃‍♂️ نشاط متوسط / تمرين 3 أيام أسبوعياً</option>
-                  <option value="active">🔥 نشاط عالي / تمرين يومي أو شغل حركي</option>
+                  <option value="sedentary">قليل الحركة / عمل مكتبي ودراسة</option>
+                  <option value="light">حركة خفيفة / يوم عادي</option>
+                  <option value="moderate">نشاط متوسط / تمرين 3 أيام أسبوعياً</option>
+                  <option value="active">نشاط عالي / تمرين يومي أو عمل حركي</option>
                 </select>
               </div>
             </div>
@@ -805,15 +814,15 @@ export default function PeopleStepPage() {
         {/* أزرار التنقل */}
         <div className="flex items-center justify-between pt-4">
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => router.push('/')}
-            className="text-stone-600 hover:text-stone-900 font-bold"
+            className="font-bold text-stone-800"
           >
             <ArrowRight className="w-5 h-5 ml-1.5" />
-            رجوع للرئيسية
+            <span>رجوع للرئيسية</span>
           </Button>
 
-          <Button size="lg" onClick={handleNext} className="gap-2 px-8">
+          <Button size="lg" variant="primary" onClick={handleNext} className="gap-2 px-8 font-black text-base">
             <span>التالي: تحديد الميزانية والوقت</span>
             <ArrowLeft className="w-5 h-5 mr-1" />
           </Button>

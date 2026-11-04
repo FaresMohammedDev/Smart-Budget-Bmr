@@ -12,6 +12,7 @@ import {
   Flame,
   Users,
   Utensils,
+  UtensilsCrossed,
   Share2,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
@@ -22,6 +23,7 @@ import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
 import { calculateTargetMealKcal } from '@/features/nutrition/domain/meal-fraction';
 import { formatEgp, formatKcal } from '@/lib/format';
+import { getMealImageUrl } from '@/lib/meal-images';
 import {
   EngineResult,
   Meal,
@@ -32,6 +34,7 @@ import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { recommendMeals } from '@/features/recommendations/domain/engine';
 import { calculateGroupShares } from '@/features/recommendations/domain/shares';
 import { createClient } from '@/lib/supabase/client';
+import { RICH_FATHALLA_MEALS } from '@/lib/meals-data';
 
 export default function PlanResultsPage() {
   const router = useRouter();
@@ -90,42 +93,42 @@ export default function PlanResultsPage() {
     }
   };
 
-  // 2. استدعاء المنيو الفعلي من Supabase
+  // 2. استدعاء المنيو الفعلي من Supabase ودمجه مع قائمة الوجبات الغنية الكاملة لفتح الله
   useEffect(() => {
     async function fetchAndRecommend() {
       setLoading(true);
       try {
         const supabase = createClient();
-        const { data: dbMeals, error } = await supabase
+        const { data: dbMeals } = await supabase
           .from('meals')
           .select('*')
           .eq('is_available', true);
 
-        let mealsPool: Meal[] = [];
+        // خريطة وجبات قاعدة البيانات لربط الـ UUID للأوردرات
+        const dbMap = new Map((dbMeals || []).map((m: any) => [m.name_ar, m]));
 
-        if (!error && dbMeals && dbMeals.length > 0) {
-          mealsPool = dbMeals.map((m: any) => ({
-            id: m.id,
-            name_ar: m.name_ar,
-            name_en: m.name_en,
-            price: Number(m.price),
-            discount_price: m.discount_price ? Number(m.discount_price) : null,
-            is_expiring_soon: Boolean(m.is_expiring_soon),
-            is_available: m.is_available,
-            total_kcal: Number(m.total_kcal),
-            kind: m.kind,
-            portion_type: m.portion_type,
-            servings: m.servings || 1,
-            image_url: m.image_url || '/images/fathalla-logo.png',
-          }));
-        }
+        // دمج وجبات قاعدة البيانات مع القائمة الغنية الكاملة (30+ وجبة تشمل فطور مصري، مشويات، صواني، سناكس)
+        const mealsPool: Meal[] = RICH_FATHALLA_MEALS.map((richMeal) => {
+          const dbMatch = dbMap.get(richMeal.name_ar);
+          if (dbMatch) {
+            return {
+              ...richMeal,
+              id: dbMatch.id, // استخدام UUID من قاعدة البيانات
+              price: Number(dbMatch.price),
+              discount_price: dbMatch.discount_price ? Number(dbMatch.discount_price) : null,
+              is_expiring_soon: Boolean(dbMatch.is_expiring_soon),
+            };
+          }
+          return richMeal;
+        });
 
-        // تشغيل المحرك
+        // تشغيل المحرك الذكي مع مراعاة وقت الوجبة (mealTime) لمنع التناقضات
         const res = recommendMeals({
           availableMeals: mealsPool,
           targetKcal,
           budget,
           people: peopleNutrition,
+          mealTime,
         });
 
         setEngineResult(res);
@@ -148,7 +151,7 @@ export default function PlanResultsPage() {
     }
 
     fetchAndRecommend();
-  }, [budget, targetKcal]);
+  }, [budget, targetKcal, mealTime]);
 
   // تأكيد الطلب وإنشاء البون
   const handleConfirmOrder = async () => {
@@ -205,31 +208,31 @@ export default function PlanResultsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-8 space-y-6">
         {/* شريط المراحل */}
-        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b border-orange-200/80 pb-4">
+        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b-2 border-[#E7D7C7] pb-4">
           <div className="flex items-center gap-2 text-stone-500">
-            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
-              ✓
+            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs border border-emerald-300">
+              <Check className="w-4 h-4 stroke-[2.5]" />
             </span>
-            <span>بيانات الأفراد</span>
+            <span className="font-extrabold">بيانات الأفراد</span>
           </div>
           <div className="h-1 flex-1 mx-4 rounded-full bg-emerald-200" />
           <div className="flex items-center gap-2 text-stone-500">
-            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
-              ✓
+            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs border border-emerald-300">
+              <Check className="w-4 h-4 stroke-[2.5]" />
             </span>
-            <span>الميزانية والوقت</span>
+            <span className="font-extrabold">الميزانية والوقت</span>
           </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-orange-200" />
-          <div className="flex items-center gap-2 text-red-600">
-            <span className="w-7 h-7 rounded-full bg-gradient-to-r from-red-600 to-orange-500 text-white flex items-center justify-center font-black text-xs shadow-sm">
+          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-300" />
+          <div className="flex items-center gap-2 text-[#6B0F1A]">
+            <span className="w-7 h-7 rounded-full bg-[#6B0F1A] text-white flex items-center justify-center font-black text-xs border border-[#3E080F] shadow-xs">
               3
             </span>
-            <span>ترشيح الوجبات</span>
+            <span className="font-black">ترشيح الوجبات</span>
           </div>
         </div>
 
@@ -299,19 +302,32 @@ export default function PlanResultsPage() {
           <div className="space-y-8">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-stone-900">
-                  أفضل توليفات الوجبات المقترحة لكم 🍽️
+                <h2 className="text-2xl sm:text-3xl font-black text-stone-900 flex items-center gap-2">
+                  <UtensilsCrossed className="w-6 h-6 text-red-600 stroke-[2.25]" />
+                  <span>أفضل توليفات الوجبات المقترحة لكم</span>
                 </h2>
                 <p className="text-xs sm:text-sm text-stone-600 mt-1 font-medium">
                   مضبوطة بدقة لتناسب ميزانيتكم ({formatEgp(budget)}) وتشبعكم تماماً ({formatKcal(targetKcal)})
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-200 text-xs shadow-sm">
-                <Sparkles className="w-4 h-4 text-orange-600" />
-                <span className="font-black text-orange-950">
-                  {engineResult?.status === 'success' ? engineResult.recommendations.length : 0} توليفات مشبعة
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full bg-[#FAF0F0] text-[#6B0F1A] border-2 border-[#6B0F1A]/20 font-black shadow-xs">
+                  {mealTime === 'breakfast'
+                    ? '🍳 مقترحات فطور مصري طازج'
+                    : mealTime === 'lunch'
+                    ? '🍗 مقترحات غداء رئيسية ومشبعة'
+                    : mealTime === 'dinner'
+                    ? '🌙 مقترحات عشاء شهية'
+                    : '☕ سناك وتصبيرة خفيفة'}
                 </span>
+
+                <div className="flex items-center gap-2 bg-[#FEF9EE] px-4 py-1.5 rounded-full border-2 border-[#D97706]/30 text-xs shadow-xs">
+                  <Sparkles className="w-4 h-4 text-[#D97706]" />
+                  <span className="font-black text-[#854D0E]">
+                    {engineResult?.status === 'success' ? engineResult.recommendations.length : 0} توليفات مشبعة
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -324,10 +340,10 @@ export default function PlanResultsPage() {
                     <div
                       key={rec.id}
                       onClick={() => handleSelectMeal(rec)}
-                      className={`relative p-6 rounded-3xl border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 shadow-sm ${
+                      className={`relative p-6 rounded-[28px] border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 shadow-sm ${
                         isSelected
-                          ? 'bg-orange-50/70 border-orange-500 shadow-xl shadow-orange-500/20 scale-[1.01]'
-                          : 'bg-white border-stone-200 hover:border-orange-300 hover:shadow-md'
+                          ? 'bg-[#FAF0F0] border-3 border-[#6B0F1A] shadow-xl shadow-[#6B0F1A]/15 scale-[1.02]'
+                          : 'bg-white border-2 border-[#E7D7C7] hover:border-[#6B0F1A] hover:shadow-lg'
                       }`}
                     >
                       {/* شارة التميز */}
@@ -338,10 +354,10 @@ export default function PlanResultsPage() {
                           {rec.title_ar}
                         </Badge>
                         <div
-                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors ${
                             isSelected
-                              ? 'bg-gradient-to-r from-red-600 to-orange-500 border-transparent text-white'
-                              : 'border-stone-300'
+                              ? 'bg-[#6B0F1A] border-[#3E080F] text-white shadow-xs'
+                              : 'border-stone-300 bg-white'
                           }`}
                         >
                           {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
@@ -351,10 +367,10 @@ export default function PlanResultsPage() {
                       {/* تفاصيل الوجبات في هذا الاقتراح */}
                       <div className="space-y-3">
                         {rec.items.map((item, iIdx) => (
-                          <div key={iIdx} className="flex items-center gap-3">
-                            <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 flex-shrink-0 shadow-sm">
+                          <div key={iIdx} className="flex items-center gap-3.5">
+                            <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 border-2 border-[#6B0F1A]/20 flex-shrink-0 shadow-sm">
                               <Image
-                                src={item.meal.image_url || '/images/fathalla-logo.png'}
+                                src={getMealImageUrl(item.meal.name_ar, item.meal.image_url)}
                                 alt={item.meal.name_ar}
                                 fill
                                 unoptimized
@@ -362,13 +378,13 @@ export default function PlanResultsPage() {
                               />
                             </div>
                             <div className="flex-1">
-                              <div className="font-black text-stone-900 text-base">
+                              <div className="font-black text-[#1E1210] text-base leading-snug">
                                 {item.quantity} × {item.meal.name_ar}
                               </div>
-                              <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5 font-bold">
-                                <span className="text-orange-600">{formatKcal(item.meal.total_kcal * item.quantity)}</span>
+                              <div className="text-xs text-stone-600 flex items-center gap-2 mt-1 font-bold">
+                                <span className="text-[#6B0F1A] bg-[#FAF0F0] px-2 py-0.5 rounded-lg border border-[#6B0F1A]/20 font-black">{formatKcal(item.meal.total_kcal * item.quantity)}</span>
                                 <span>•</span>
-                                <span className="text-stone-700">{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
+                                <span className="text-[#854D0E] bg-[#FEF9EE] px-2 py-0.5 rounded-lg border border-[#D97706]/30 font-black">{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
                               </div>
                             </div>
                           </div>
@@ -376,16 +392,16 @@ export default function PlanResultsPage() {
                       </div>
 
                       {/* شريط الإجمالي للكارت */}
-                      <div className="pt-3 border-t border-stone-200 flex items-center justify-between text-xs">
+                      <div className="pt-3 border-t-2 border-stone-200/80 flex items-center justify-between text-xs">
                         <div>
                           <span className="text-stone-500 font-bold">إجمالي السعرات: </span>
-                          <span className="font-black text-emerald-700 text-sm">
+                          <span className="font-black text-emerald-800 text-sm">
                             {formatKcal(rec.totalKcal)}
                           </span>
                         </div>
                         <div>
                           <span className="text-stone-500 font-bold">السعر الكلي: </span>
-                          <span className="text-lg font-black text-red-600">
+                          <span className="text-xl font-black text-[#6B0F1A]">
                             {formatEgp(rec.totalPrice)}
                           </span>
                         </div>
@@ -397,13 +413,13 @@ export default function PlanResultsPage() {
 
             {/* تفاصيل نصيب الأفراد للوجبة المحددة حالياً */}
             {people.length > 0 && currentShares.length > 0 && (
-              <div className="p-6 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-4">
+              <div className="p-6 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 font-black text-base text-stone-900">
-                    <Users className="w-5 h-5 text-orange-600" />
+                  <div className="flex items-center gap-2 font-black text-base text-[#1E1210]">
+                    <Users className="w-5 h-5 text-[#6B0F1A]" />
                     <span>
                       نصيب كل فرد من وجبة{' '}
-                      <span className="text-orange-600">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
+                      <span className="text-[#6B0F1A]">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
                     </span>
                   </div>
                   <Badge variant="default">حساب تلقائي حسب السعرات</Badge>
@@ -413,16 +429,16 @@ export default function PlanResultsPage() {
                   {currentShares.map((sh, sIdx) => (
                     <div
                       key={sIdx}
-                      className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100 text-xs space-y-1.5"
+                      className="p-4 rounded-2xl bg-[#FAF0F0] border border-[#6B0F1A]/20 text-xs space-y-1.5"
                     >
-                      <div className="flex justify-between font-black text-stone-900">
+                      <div className="flex justify-between font-black text-[#1E1210]">
                         <span>{sh.personName}</span>
-                        <span className="text-orange-600">{sh.sharePercent}%</span>
+                        <span className="text-[#6B0F1A] font-extrabold">{sh.sharePercent}%</span>
                       </div>
-                      <div className="text-emerald-700 font-bold">
+                      <div className="text-emerald-800 font-black">
                         {formatKcal(sh.shareKcal)}
                       </div>
-                      <div className="text-stone-600 text-[11px] space-y-0.5 pt-1 border-t border-orange-100 font-medium">
+                      <div className="text-stone-600 text-[11px] space-y-0.5 pt-1 border-t border-[#6B0F1A]/10 font-semibold">
                         {sh.allocatedItems.map((it, itIdx) => (
                           <div key={itIdx}>• {it.portionDescription}</div>
                         ))}
@@ -434,24 +450,25 @@ export default function PlanResultsPage() {
             )}
 
             {/* أزرار التأكيد والطباعة */}
-            <div className="flex items-center justify-between pt-4 border-t border-stone-200">
+            <div className="flex items-center justify-between pt-4 border-t-2 border-[#E7D7C7]">
               <Button
-                variant="ghost"
+                variant="outline"
                 onClick={() => router.push('/plan/budget')}
-                className="text-stone-600 hover:text-stone-900 font-bold"
+                className="font-bold text-stone-800"
               >
                 <ArrowRight className="w-5 h-5 ml-1.5" />
-                تغيير الميزانية
+                <span>تغيير الميزانية</span>
               </Button>
 
               <Button
                 size="xl"
+                variant="primary"
                 onClick={handleConfirmOrder}
                 disabled={!selectedOpt || ordering}
-                className="gap-2.5 px-10 shadow-xl shadow-orange-500/25"
+                className="gap-2.5 px-10 font-black text-lg"
               >
-                <Printer className="w-6 h-6" />
-                <span>{ordering ? 'جاري طباعة البون...' : 'تأكيد الوجبة وطباعة البون 🧾'}</span>
+                <Printer className="w-6 h-6 stroke-[2.25]" />
+                <span>{ordering ? 'جاري طباعة البون...' : 'تأكيد الوجبة وطباعة البون'}</span>
               </Button>
             </div>
           </div>

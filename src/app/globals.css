@@ -1,13 +1,134 @@
 @import "tailwindcss";
 
 :root {
-  --font-sans: var(--font-cairo), system-ui, -apple-system, sans-serif;
-  --fathalla-orange: #F37A20;
-  --fathalla-orange-hover: #d96614;
+  --font-sans: var(--font-ibm-plex-arabic), system-ui, -apple-system, sans-serif;
+  
+  /* هوية المطاعم الجريئة (Bold Fast-Casual Gourmet) */
+  --fathalla-burgundy: #6B0F1A;
+  --fathalla-burgundy-dark: #3E080F;
+  --fathalla-mustard: #E5A91E;
+  --fathalla-mustard-dark: #854D0E;
+  --fathalla-charcoal: #1E1210;
+  --fathalla-canvas: #F8F4EE;
+  --fathalla-card: #FFFFFF;
 }
 
 body {
   font-family: var(--font-sans);
+  background-color: #F8F4EE;
+  color: #1E1210;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  background-image: 
+    radial-gradient(#E8DACB 0.75px, transparent 0.75px),
+    radial-gradient(#E8DACB 0.75px, #F8F4EE 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+/* تدرجات وهوية المطاعم الجريئة */
+.bg-gourmet-burgundy {
+  background: linear-gradient(135deg, #7A1220 0%, #580B14 100%);
+}
+
+.bg-gourmet-mustard {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.bg-gourmet-dark {
+  background: linear-gradient(135deg, #2A1412 0%, #170908 100%);
+}
+
+/* كروت الكيوسك الملموسة ذات الحواف الواضحة */
+.kiosk-card {
+  background: #FFFFFF;
+  border: 2px solid #E7D7C7;
+  border-radius: 28px;
+  box-shadow: 0 8px 24px -4px rgba(43, 24, 16, 0.08), 0 2px 6px -1px rgba(43, 24, 16, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kiosk-card:hover {
+  border-color: #6B0F1A;
+  box-shadow: 0 16px 36px -8px rgba(107, 15, 26, 0.16), 0 4px 12px -2px rgba(107, 15, 26, 0.08);
+  transform: translateY(-2px);
+}
+
+/* استيكرات وعلامات الأطعمة الملموسة */
+.badge-sticker-burgundy {
+  background-color: #FAF0F0;
+  border: 1.5px solid #6B0F1A;
+  color: #6B0F1A;
+  font-weight: 800;
+}
+
+.badge-sticker-mustard {
+  background-color: #FEF9EE;
+  border: 1.5px solid #D97706;
+  color: #92400E;
+  font-weight: 800;
+}
+
+.badge-sticker-green {
+  background-color: #F0FDF4;
+  border: 1.5px solid #16A34A;
+  color: #166534;
+  font-weight: 800;
+}
+
+/* أزرار 3D بارزة بلمس الأجهزة الحقيقية */
+.btn-tactile-burgundy {
+  background: linear-gradient(180deg, #8B1422 0%, #6B0F1A 100%);
+  border: 2px solid #3E080F;
+  box-shadow: 0 5px 0 0 #3E080F, 0 8px 16px -2px rgba(107, 15, 26, 0.35);
+  color: #FFFFFF;
+  transition: all 0.1s ease;
+}
+
+.btn-tactile-burgundy:hover {
+  transform: translateY(2px);
+  box-shadow: 0 3px 0 0 #3E080F, 0 4px 10px -2px rgba(107, 15, 26, 0.25);
+}
+
+.btn-tactile-burgundy:active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 0 #3E080F;
+}
+
+.btn-tactile-mustard {
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+  border: 2px solid #854D0E;
+  box-shadow: 0 5px 0 0 #854D0E, 0 8px 16px -2px rgba(217, 119, 6, 0.35);
+  color: #FFFFFF;
+  transition: all 0.1s ease;
+}
+
+.btn-tactile-mustard:hover {
+  transform: translateY(2px);
+  box-shadow: 0 3px 0 0 #854D0E, 0 4px 10px -2px rgba(217, 119, 6, 0.25);
+}
+
+.btn-tactile-mustard:active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 0 #854D0E;
+}
+
+.btn-tactile-white {
+  background: #FFFFFF;
+  border: 2px solid #D6C7B2;
+  box-shadow: 0 4px 0 0 #C4B29A;
+  color: #1E1210;
+  transition: all 0.1s ease;
+}
+
+.btn-tactile-white:hover {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 0 #C4B29A;
+}
+
+.btn-tactile-white:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 0 #C4B29A;
 }
 
 /* طباعة بون الكاشير الحراري 80mm أبيض وأسود نظيف */
@@ -18,6 +139,7 @@ body {
   }
   body {
     background: white !important;
+    background-image: none !important;
     color: black !important;
   }
   .no-print {

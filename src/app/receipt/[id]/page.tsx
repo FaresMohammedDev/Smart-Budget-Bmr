@@ -75,24 +75,7 @@ export default function ReceiptPrintPage() {
         ],
       }));
     } else {
-      items = [
-        {
-          id: 'oi-default',
-          order_id: orderId,
-          meal_id: 'm1',
-          meal_name_ar: 'ساندوتش شاورما فراخ',
-          meal_name_en: 'Chicken Shawarma Sandwich',
-          portion_type: 'individual',
-          unit_price: 85,
-          quantity: 2,
-          unit_kcal: 550,
-          line_total: 170,
-          components: [
-            { name_ar: 'شاورما فراخ', name_en: 'Chicken', quantity: 120, unit: 'g', kcal: 240 },
-            { name_ar: 'عيش سوري', name_en: 'Syrian Bread', quantity: 1, unit: 'piece', kcal: 200 },
-          ],
-        },
-      ];
+      items = [];
     }
 
     const calculatedTotal = items.reduce((s, i) => s + i.line_total, 0);
@@ -214,65 +197,73 @@ export default function ReceiptPrintPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
       <KioskHeader />
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-8 space-y-8">
         {/* شارة النجاح */}
-        <div className="p-8 rounded-3xl bg-white border border-orange-100 shadow-sm text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto animate-bounce">
-            <CheckCircle2 className="w-9 h-9" />
+        <div className="p-8 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm text-center space-y-3">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 border-2 border-emerald-300 flex items-center justify-center mx-auto animate-bounce">
+            <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-stone-900">
-            تم تسجيل طلبك بنجاح! 🎉
+          <h1 className="text-2xl sm:text-3xl font-black text-[#1E1210]">
+            تم تسجيل طلبك بنجاح
           </h1>
-          <p className="text-sm text-stone-600 max-w-lg mx-auto font-medium">
+          <p className="text-sm text-stone-600 max-w-lg mx-auto font-semibold">
             اطبع البون وتوجه به مباشرة لكاشير قسم الوجبات بفتح الله ماركت لتأكيد الدفع واستلام وجبتك الساخنة فوراً.
           </p>
 
-          <div className="flex items-center justify-center gap-2 text-xs text-stone-500 font-bold pt-2">
-            <Clock className="w-4 h-4 text-orange-600" />
+          <div className="flex items-center justify-center gap-2 text-xs text-stone-600 font-bold pt-2">
+            <Clock className="w-4 h-4 text-[#6B0F1A] stroke-[2.25]" />
             <span>سيتم إعادة ضبط الشاشة تلقائياً بعد: </span>
-            <span className="font-black text-red-600 text-sm">{countdown} ثانية</span>
+            <span className="font-black text-[#6B0F1A] text-sm">{countdown} ثانية</span>
           </div>
         </div>
 
-        {/* أزرار التحكم بالطباعة */}
+        {/* أزرار التحكم بالطباعة 3D */}
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Button
             size="xl"
+            variant="primary"
             onClick={handlePrintClick}
-            className="gap-3 text-lg px-8 py-4 shadow-xl shadow-orange-500/25 select-none"
+            className="gap-3 text-lg px-8 py-4 select-none font-black"
           >
-            <Printer className="w-6 h-6" />
-            <span>طباعة البون الآن 🧾</span>
+            <Printer className="w-6 h-6 stroke-[2.25]" />
+            <span>طباعة البون الآن</span>
           </Button>
 
           <Button
-            variant="secondary"
+            variant="outline"
             size="xl"
             onClick={handleFinish}
-            className="gap-2 select-none bg-white hover:bg-stone-100 text-stone-800 border-stone-200 shadow-sm"
+            className="gap-2 select-none font-black text-stone-800"
           >
-            <RotateCcw className="w-5 h-5 text-stone-500" />
+            <RotateCcw className="w-5 h-5 text-stone-600" />
             <span>طلب جديد</span>
           </Button>
         </div>
 
         {/* معاينة البون (تطابق الورق الحراري 80mm) */}
         <div className="space-y-3">
-          <div className="text-center text-xs font-bold text-stone-500">
+          <div className="text-center text-xs font-black text-[#5C4535]">
             معاينة بون الكاشير الحراري (80mm Thermal Receipt)
           </div>
 
-          <div className="p-6 bg-white rounded-3xl border border-orange-100 shadow-sm flex justify-center overflow-x-auto">
+          <div className="p-6 bg-white rounded-[28px] border-2 border-[#E7D7C7] shadow-sm flex justify-center overflow-x-auto">
             {/* الحاوية المضمونة للـ Ref */}
             <div ref={receiptRef}>
-              <Receipt
-                order={order}
-                items={orderItems}
-                people={orderPeople}
-              />
+              {orderItems.length > 0 ? (
+                <Receipt
+                  order={order}
+                  items={orderItems}
+                  people={orderPeople}
+                />
+              ) : (
+                <div className="p-8 text-center text-stone-500 font-bold space-y-3">
+                  <div className="w-8 h-8 border-3 border-[#6B0F1A] border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs">جاري استرجاع تفاصيل بون الطلب من قاعدة البيانات...</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

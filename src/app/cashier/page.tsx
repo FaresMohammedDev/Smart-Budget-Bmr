@@ -12,6 +12,9 @@ import {
   LogOut,
   Flame,
   Utensils,
+  Check,
+  Zap,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -106,21 +109,21 @@ export default function CashierPage() {
   const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 flex flex-col p-4 sm:p-8 space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFDF9] via-[#FFF6ED] to-[#FFEDE0] text-stone-900 flex flex-col p-4 sm:p-8 space-y-6">
       {/* الرأس */}
-      <header className="flex items-center justify-between border-b border-orange-200/80 pb-4">
+      <header className="flex items-center justify-between border-b-2 border-orange-200/80 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-red-600 to-orange-500 text-white shadow-md shadow-orange-500/20">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-[#BA1A1A] to-[#E8590C] text-white shadow-md shadow-orange-500/25">
             <CreditCard className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-stone-900">شاشة كاشير فتح الله ماركت</h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-black">
+              <h1 className="text-xl sm:text-2xl font-black text-stone-900">شاشة كاشير فتح الله ماركت</h1>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-200">
                 POS Terminal
               </span>
             </div>
-            <p className="text-xs text-stone-500 font-semibold">تأكيد دفع واستلام بونات الوجبات الجاهزة بالمطعم</p>
+            <p className="text-xs text-stone-600 font-bold">تأكيد دفع واستلام بونات الوجبات الساخنة بالمطعم</p>
           </div>
         </div>
 
@@ -174,7 +177,10 @@ export default function CashierPage() {
                 : 'text-stone-600 hover:text-emerald-700'
             }`}
           >
-            <span>المؤكدة والمدفوعة ✓</span>
+            <span className="flex items-center gap-1">
+              <span>المؤكدة والمدفوعة</span>
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+            </span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
               {paidCount}
             </span>
@@ -234,10 +240,20 @@ export default function CashierPage() {
                       بون استلام #{ord.order_number}
                     </span>
                     <Badge variant={ord.status === 'paid' ? 'success' : 'warning'}>
-                      {ord.status === 'paid' ? 'تم الدفع والاستلام ✓' : 'في انتظار الدفع'}
+                      {ord.status === 'paid' ? 'تم الدفع والاستلام' : 'في انتظار الدفع'}
                     </Badge>
-                    <span className="text-xs text-stone-500 font-bold">
-                      ({ord.order_mode === 'smart_budget' ? 'حساب ذكي ⚡' : 'طلب سريع مباشر 🍔'})
+                    <span className="text-xs text-stone-500 font-bold inline-flex items-center gap-1">
+                      {ord.order_mode === 'smart_budget' ? (
+                        <>
+                          <Zap className="w-3 h-3 text-amber-500" />
+                          <span>(حساب ذكي)</span>
+                        </>
+                      ) : (
+                        <>
+                          <UtensilsCrossed className="w-3 h-3 text-orange-500" />
+                          <span>(طلب سريع مباشر)</span>
+                        </>
+                      )}
                     </span>
                   </div>
 
@@ -270,8 +286,9 @@ export default function CashierPage() {
                       <span>{processingId === ord.id ? 'جاري التأكيد...' : 'تأكيد الدفع والاستلام'}</span>
                     </Button>
                   ) : (
-                    <span className="text-xs font-black text-emerald-700 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
-                      مدفوع ومسلم ✓
+                    <span className="text-xs font-black text-emerald-700 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 inline-flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>مدفوع ومسلم</span>
                     </span>
                   )}
                 </div>

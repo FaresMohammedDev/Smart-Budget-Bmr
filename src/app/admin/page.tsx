@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { Meal } from '@/features/recommendations/domain/types';
 import { createClient } from '@/lib/supabase/client';
+import { getMealImageUrl } from '@/lib/meal-images';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -88,7 +89,7 @@ export default function AdminDashboardPage() {
             kind: m.kind,
             portion_type: m.portion_type,
             servings: m.servings,
-            image_url: m.image_url || '/images/meal-placeholder.svg',
+            image_url: getMealImageUrl(m.name_ar, m.image_url),
           }))
         );
       } else {
@@ -406,15 +407,15 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-800 flex flex-col p-4 sm:p-8 space-y-8">
+    <div className="min-h-screen bg-gradient-to-b from-[#FFFDF9] via-[#FFF6ED] to-[#FFEDE0] text-stone-900 flex flex-col p-4 sm:p-8 space-y-8">
       {/* الرأس */}
-      <header className="flex items-center justify-between border-b border-orange-200/80 pb-4">
+      <header className="flex items-center justify-between border-b-2 border-orange-200/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-stone-900">لوحة تحكم مطبخ وإدارة فتح الله</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-stone-900">لوحة تحكم مطبخ وإدارة فتح الله</h1>
             <Badge variant="special">Admin & Kitchen</Badge>
           </div>
-          <p className="text-xs text-stone-500 mt-1">
+          <p className="text-xs sm:text-sm text-stone-600 mt-1 font-bold">
             إدارة المنيو، إحصائيات المبيعات، والتحكم الفوري في توافر الوجبات بالمطبخ
           </p>
         </div>
@@ -542,7 +543,7 @@ export default function AdminDashboardPage() {
                   <th className="pb-3 font-semibold">السعر</th>
                   <th className="pb-3 font-semibold">السعرات</th>
                   <th className="pb-3 font-semibold">النوع</th>
-                  <th className="pb-3 font-semibold text-center">عرض قرب الصلاحية ⭐</th>
+                  <th className="pb-3 font-semibold text-center">عرض قرب الصلاحية</th>
                   <th className="pb-3 font-semibold text-center">التوافر في المطبخ</th>
                   <th className="pb-3 font-semibold text-center">إجراءات</th>
                 </tr>
@@ -589,13 +590,20 @@ export default function AdminDashboardPage() {
                     <td className="py-3.5 text-center">
                       <button
                         onClick={() => handleToggleExpiringSoon(meal.id, meal.is_expiring_soon)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1 ${
                           meal.is_expiring_soon
                             ? 'bg-orange-100 text-[#F37A20] border border-orange-300 shadow-sm'
                             : 'bg-stone-100 text-stone-400 hover:text-stone-700'
                         }`}
                       >
-                        {meal.is_expiring_soon ? 'مُفعّل كعرض توفير ⭐' : 'عادي'}
+                        {meal.is_expiring_soon ? (
+                          <>
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            <span>مُفعّل كعرض توفير</span>
+                          </>
+                        ) : (
+                          'عادي'
+                        )}
                       </button>
                     </td>
 
@@ -603,13 +611,23 @@ export default function AdminDashboardPage() {
                     <td className="py-3.5 text-center">
                       <button
                         onClick={() => handleToggleAvailability(meal.id, meal.is_available)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1 ${
                           meal.is_available
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                             : 'bg-red-50 text-red-700 border border-red-300'
                         }`}
                       >
-                        {meal.is_available ? 'متوفر بالمطبخ ✓' : 'غير متوفر (نافد) ✕'}
+                        {meal.is_available ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>متوفر بالمطبخ</span>
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>غير متوفر (نافد)</span>
+                          </>
+                        )}
                       </button>
                     </td>
 
@@ -758,8 +776,9 @@ export default function AdminDashboardPage() {
                   onChange={(e) => setNewMeal({ ...newMeal, is_expiring_soon: e.target.checked })}
                   className="w-4 h-4 accent-[#F37A20]"
                 />
-                <span className="text-xs text-stone-700 font-bold">
-                  تحديد كوجبة قربت صلاحيتها (عرض توفير طازج يتصدر الترشيحات بالكيوسك ⭐)
+                <span className="text-xs text-stone-700 font-bold inline-flex items-center gap-1">
+                  <span>تحديد كوجبة قربت صلاحيتها (عرض توفير طازج يتصدر الترشيحات بالكيوسك)</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 </span>
               </label>
 
@@ -908,8 +927,9 @@ export default function AdminDashboardPage() {
                   }
                   className="w-4 h-4 accent-[#F37A20]"
                 />
-                <span className="text-xs text-stone-700 font-bold">
-                  تحديد كوجبة قربت صلاحيتها (عرض توفير طازج ⭐)
+                <span className="text-xs text-stone-700 font-bold inline-flex items-center gap-1">
+                  <span>تحديد كوجبة قربت صلاحيتها (عرض توفير طازج)</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 </span>
               </label>
 

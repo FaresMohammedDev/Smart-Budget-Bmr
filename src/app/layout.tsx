@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import { Cairo } from 'next/font/google';
+import { IBM_Plex_Sans_Arabic } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/providers/QueryProvider';
 
-const cairo = Cairo({
+const ibmPlexArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic', 'latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-cairo',
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-ibm-plex-arabic',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -23,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`}>
-      <body className="min-h-full bg-[#FAF7F2] text-stone-800 font-sans selection:bg-[#F37A20] selection:text-white flex flex-col">
+    <html lang="ar" dir="rtl" className={`${ibmPlexArabic.variable} h-full antialiased`}>
+      <body className="min-h-full bg-[#FAF6F0] text-stone-900 font-sans selection:bg-[#E8590C] selection:text-white flex flex-col">
         <QueryProvider>
           {children}
         </QueryProvider>

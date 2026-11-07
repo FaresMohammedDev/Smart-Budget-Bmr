@@ -92,7 +92,7 @@ export interface GroupMemberRow {
 export interface OrderRow {
   id: string;
   order_number: number;
-  user_id: string;
+  user_id: string | null;
   group_id: string | null;
   order_mode: OrderMode;
   people_count: number;

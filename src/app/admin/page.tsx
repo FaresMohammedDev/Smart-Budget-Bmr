@@ -1,952 +1,585 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  TrendingUp,
   ShoppingBag,
-  DollarSign,
-  Plus,
-  Flame,
-  Check,
-  X,
-  Upload,
-  AlertTriangle,
-  RotateCcw,
-  LogOut,
+  Banknote,
+  UtensilsCrossed,
   Sparkles,
-  Edit2,
+  Trophy,
+  Plus,
+  Pencil,
   Trash2,
+  Upload,
+  X,
+  Search,
+  LogOut,
+  RotateCcw,
+  Flame,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
+import { useCountUp } from '@/components/people/KcalRing';
+import { getMealMacros } from '@/features/nutrition/domain/macros';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { Meal } from '@/features/recommendations/domain/types';
-import { createClient } from '@/lib/supabase/client';
-import { getMealImageUrl } from '@/lib/meal-images';
+import { listMeals, saveMeal, deleteMeal, uploadMealImage, getStats, errorMessage } from '@/lib/data/repository';
+
+interface MealForm {
+  id?: string;
+  name_ar: string;
+  name_en: string;
+  price: number;
+  discount_price: number | null;
+  is_expiring_soon: boolean;
+  kind: Meal['kind'];
+  portion_type: Meal['portion_type'];
+  total_kcal: number;
+  carbs_g: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  servings: number;
+  image_url: string;
+}
+
+const EMPTY_FORM: MealForm = {
+  name_ar: '',
+  name_en: '',
+  price: 100,
+  discount_price: null,
+  is_expiring_soon: false,
+  kind: 'main',
+  portion_type: 'individual',
+  total_kcal: 600,
+  carbs_g: null,
+  protein_g: null,
+  fat_g: null,
+  servings: 1,
+  image_url: '/images/meal-placeholder.svg',
+};
+
+const KINDS: { id: Meal['kind']; label: string }[] = [
+  { id: 'main', label: 'رئيسي' },
+  { id: 'side', label: 'جانبي' },
+  { id: 'drink', label: 'مشروب' },
+  { id: 'dessert', label: 'حلوى' },
+];
+
+const KIND_LABEL: Record<string, string> = { main: 'رئيسي', side: 'جانبي', drink: 'مشروب', dessert: 'حلوى' };
+
+type ListFilter = 'all' | 'available' | 'out' | 'offers';
+
+const FIELD =
+  'w-full h-12 rounded-xl bg-white border-2 border-[#D6C7B2] px-3.5 font-bold text-base focus:outline-none focus:border-[#6B0F1A] placeholder:text-stone-400 placeholder:font-semibold';
+
+function Switch({ on, onChange, label, tone = 'green' }: { on: boolean; onChange: () => void; label: string; tone?: 'green' | 'amber' }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onChange}
+      className={`relative w-14 h-8 rounded-full border-2 transition-colors duration-300 cursor-pointer shrink-0 ${
+        on ? (tone === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-[#E5A91E] border-[#D97706]') : 'bg-stone-200 border-stone-300'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 ${on ? 'right-[1.65rem]' : 'right-0.5'}`}
+      />
+    </button>
+  );
+}
+
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5 min-w-0">
+      <span className="text-sm font-black text-stone-600 px-0.5">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<MealForm | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Meal | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadingEditImage, setUploadingEditImage] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [listFilter, setListFilter] = useState<ListFilter>('all');
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // فورم إضافة وجبة جديدة
-  const [newMeal, setNewMeal] = useState({
-    name_ar: '',
-    name_en: '',
-    price: 100,
-    discount_price: null as number | null,
-    is_expiring_soon: false,
-    kind: 'main' as const,
-    portion_type: 'individual' as const,
-    total_kcal: 600,
-    image_url: '/images/meal-placeholder.svg',
-  });
-
-  // إحصائيات حية حقيقية محسوبة من الطلبات الفعلية
   const [stats, setStats] = useState<{
     totalOrders: number;
     totalRevenue: number;
     paidOrders: number;
     topSelling: { name: string; sales: number; revenue: number }[];
-  }>({
-    totalOrders: 0,
-    totalRevenue: 0,
-    paidOrders: 0,
-    topSelling: [],
-  });
+  }>({ totalOrders: 0, totalRevenue: 0, paidOrders: 0, topSelling: [] });
 
-  // جلب الوجبات والإحصائيات الحية من Supabase
+  // جلب الوجبات والإحصائيات الحية
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const supabase = createClient();
-
-      // 1. جلب الوجبات من جدول meals
-      const { data: mealsData, error: mealsErr } = await supabase
-        .from('meals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!mealsErr && mealsData && mealsData.length > 0) {
-        setMeals(
-          mealsData.map((m: any) => ({
-            id: m.id,
-            name_ar: m.name_ar,
-            name_en: m.name_en,
-            price: Number(m.price),
-            discount_price: m.discount_price ? Number(m.discount_price) : null,
-            is_expiring_soon: Boolean(m.is_expiring_soon),
-            is_available: Boolean(m.is_available),
-            total_kcal: Number(m.total_kcal),
-            kind: m.kind,
-            portion_type: m.portion_type,
-            servings: m.servings,
-            image_url: getMealImageUrl(m.name_ar, m.image_url),
-          }))
-        );
-      } else {
-        setMeals([]);
-      }
-
-      // 2. جلب الطلبات الفعلية لحساب الإحصائيات الحية الدقيقة
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('id, status, total_price, created_at');
-
-      const { data: itemsData } = await supabase
-        .from('order_items')
-        .select('meal_name_ar, quantity, unit_price');
-
-      if (ordersData && ordersData.length > 0) {
-        const total = ordersData.length;
-        const paidList = ordersData.filter((o: any) => o.status === 'paid');
-        const paidCount = paidList.length;
-        const revenue = paidList.reduce(
-          (sum: number, o: any) => sum + Number(o.total_price || 0),
-          0
-        );
-
-        // تجميع أكثر الوجبات مبيعاً بناءً على عناصر الطلبات الفعلية
-        const salesMap: Record<string, { sales: number; revenue: number }> = {};
-        if (itemsData && itemsData.length > 0) {
-          itemsData.forEach((item: any) => {
-            const name = item.meal_name_ar || 'وجبة';
-            const qty = Number(item.quantity || 1);
-            const price = Number(item.unit_price || 0);
-            if (!salesMap[name]) {
-              salesMap[name] = { sales: 0, revenue: 0 };
-            }
-            salesMap[name].sales += qty;
-            salesMap[name].revenue += qty * price;
-          });
-        }
-
-        const topSellingList = Object.entries(salesMap)
-          .map(([name, d]) => ({ name, sales: d.sales, revenue: d.revenue }))
-          .sort((a, b) => b.sales - a.sales)
-          .slice(0, 4);
-
-        setStats({
-          totalOrders: total,
-          totalRevenue: revenue,
-          paidOrders: paidCount,
-          topSelling: topSellingList,
-        });
-      } else {
-        setStats({
-          totalOrders: 0,
-          totalRevenue: 0,
-          paidOrders: 0,
-          topSelling: [],
-        });
-      }
-    } catch {
-      setMeals([]);
+      const [menu, summary] = await Promise.all([listMeals(), getStats()]);
+      setMeals(menu);
+      setStats(summary);
+      setErrorMsg('');
+    } catch (error) {
+      setErrorMsg(errorMessage(error));
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
-    loadAdminData();
+    Promise.all([listMeals(), getStats()])
+      .then(([menu, summary]) => { setMeals(menu); setStats(summary); })
+      .catch((error) => setErrorMsg(errorMessage(error)))
+      .finally(() => setLoading(false));
   }, []);
 
-  // تبديل التوافر (Toggle Availability)
-  const handleToggleAvailability = async (mealId: string, currentStatus: boolean) => {
-    const updated = !currentStatus;
-    setMeals((prev) =>
-      prev.map((m) => (m.id === mealId ? { ...m, is_available: updated } : m))
-    );
-
-    try {
-      const supabase = createClient();
-      await supabase
-        .from('meals')
-        .update({ is_available: updated })
-        .eq('id', mealId);
-    } catch {
-      //
-    }
+  const handleToggleAvailability = async (id: string, current: boolean) => {
+    try { await saveMeal({ is_available: !current }, id); await loadAdminData(); }
+    catch (error) { setErrorMsg(errorMessage(error)); }
+  };
+  const handleToggleExpiringSoon = async (id: string, current: boolean) => {
+    try { await saveMeal({ is_expiring_soon: !current }, id); await loadAdminData(); }
+    catch (error) { setErrorMsg(errorMessage(error)); }
   };
 
-  // تبديل حالة عرض قرب الصلاحية (Toggle Expiring Soon / Fresh Deal)
-  const handleToggleExpiringSoon = async (mealId: string, currentStatus: boolean) => {
-    const updated = !currentStatus;
-    setMeals((prev) =>
-      prev.map((m) => (m.id === mealId ? { ...m, is_expiring_soon: updated } : m))
-    );
-
-    try {
-      const supabase = createClient();
-      await supabase
-        .from('meals')
-        .update({ is_expiring_soon: updated })
-        .eq('id', mealId);
-    } catch {
-      //
-    }
-  };
-
-  // رفع صورة وجبة جديدة
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-
-    setUploadingImage(true);
+    setUploading(true);
     try {
-      const supabase = createClient();
-      const fileExt = file.name.split('.').pop() || 'png';
-      const fileName = `meal-${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('meal-images')
-        .upload(fileName, file, { upsert: true });
-
-      if (!error && data) {
-        const { data: publicUrlData } = supabase.storage
-          .from('meal-images')
-          .getPublicUrl(fileName);
-
-        setNewMeal((prev) => ({ ...prev, image_url: publicUrlData.publicUrl }));
-      } else {
-        // احتياطي Base64 إذا لم يكن الباكت مفعل في Supabase Storage
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result) {
-            setNewMeal((prev) => ({ ...prev, image_url: reader.result as string }));
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) {
-          setNewMeal((prev) => ({ ...prev, image_url: reader.result as string }));
-        }
-      };
-      reader.readAsDataURL(file);
-    } finally {
-      setUploadingImage(false);
-    }
+      const url = await uploadMealImage(file);
+      setForm((prev) => (prev ? { ...prev, image_url: url } : prev));
+    } catch (error) { setErrorMsg(errorMessage(error)); }
+    finally { setUploading(false); }
   };
 
-  // رفع صورة أثناء تعديل وجبة موجودة
-  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingMeal) return;
-
-    setUploadingEditImage(true);
-    try {
-      const supabase = createClient();
-      const fileExt = file.name.split('.').pop() || 'png';
-      const fileName = `meal-${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('meal-images')
-        .upload(fileName, file, { upsert: true });
-
-      if (!error && data) {
-        const { data: publicUrlData } = supabase.storage
-          .from('meal-images')
-          .getPublicUrl(fileName);
-
-        setEditingMeal((prev) => (prev ? { ...prev, image_url: publicUrlData.publicUrl } : null));
-      } else {
-        // احتياطي Base64
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result) {
-            setEditingMeal((prev) => (prev ? { ...prev, image_url: reader.result as string } : null));
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) {
-          setEditingMeal((prev) => (prev ? { ...prev, image_url: reader.result as string } : null));
-        }
-      };
-      reader.readAsDataURL(file);
-    } finally {
-      setUploadingEditImage(false);
-    }
-  };
-
-  // إضافة وجبة جديدة
-  const handleCreateMeal = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form || saving) return;
+    setSaving(true);
     try {
-      const generatedNameEn = newMeal.name_en.trim() || `meal-${Date.now()}`;
-      const supabase = createClient();
-      const { data, error } = await supabase.from('meals').insert([
-        {
-          name_ar: newMeal.name_ar.trim(),
-          name_en: generatedNameEn,
-          price: Number(newMeal.price),
-          discount_price: newMeal.discount_price ? Number(newMeal.discount_price) : null,
-          is_expiring_soon: Boolean(newMeal.is_expiring_soon),
-          kind: newMeal.kind,
-          portion_type: newMeal.portion_type,
-          total_kcal: Number(newMeal.total_kcal),
-          image_url: newMeal.image_url || '/images/fathalla-logo.png',
-          is_available: true,
-        },
-      ]).select();
-
-      if (!error && data) {
-        await loadAdminData();
+      const { id, name_ar, name_en, price, discount_price, total_kcal, carbs_g, protein_g, fat_g, kind, portion_type, servings, image_url, is_expiring_soon } = form;
+      if (id) {
+        await saveMeal({ name_ar, name_en, price, discount_price, total_kcal, carbs_g, protein_g, fat_g, kind, portion_type, servings, image_url, is_expiring_soon }, id);
       } else {
-        // إضافة محلية
-        setMeals((prev) => [
-          {
-            id: `m-${Date.now()}`,
-            name_ar: newMeal.name_ar,
-            name_en: generatedNameEn,
-            price: Number(newMeal.price),
-            discount_price: newMeal.discount_price ? Number(newMeal.discount_price) : null,
-            is_expiring_soon: Boolean(newMeal.is_expiring_soon),
-            is_available: true,
-            total_kcal: Number(newMeal.total_kcal),
-            kind: newMeal.kind,
-            portion_type: newMeal.portion_type,
-            servings: 1,
-            image_url: newMeal.image_url || '/images/fathalla-logo.png',
-          },
-          ...prev,
-        ]);
+        await saveMeal({ name_ar, name_en: name_en.trim() || `meal-${crypto.randomUUID()}`, price, discount_price, total_kcal, carbs_g, protein_g, fat_g, kind, portion_type, servings, image_url, is_expiring_soon, is_available: true });
       }
-      setNewMeal({
-        name_ar: '',
-        name_en: '',
-        price: 100,
-        discount_price: null,
-        is_expiring_soon: false,
-        kind: 'main',
-        portion_type: 'individual',
-        total_kcal: 500,
-        image_url: '',
-      });
-      setShowAddModal(false);
-    } catch {
-      setShowAddModal(false);
-    }
+      setForm(null);
+      await loadAdminData();
+    } catch (error) { setErrorMsg(errorMessage(error)); }
+    finally { setSaving(false); }
   };
 
-  // تعديل وجبة موجودة
-  const handleUpdateMeal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingMeal) return;
-
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('meals')
-        .update({
-          name_ar: editingMeal.name_ar,
-          name_en: editingMeal.name_en,
-          price: editingMeal.price,
-          discount_price: editingMeal.discount_price,
-          total_kcal: editingMeal.total_kcal,
-          kind: editingMeal.kind,
-          portion_type: editingMeal.portion_type,
-          is_expiring_soon: editingMeal.is_expiring_soon,
-          image_url: editingMeal.image_url,
-        })
-        .eq('id', editingMeal.id);
-
-      if (!error) {
-        await loadAdminData();
-      } else {
-        // تحديث محلي
-        setMeals((prev) =>
-          prev.map((m) => (m.id === editingMeal.id ? editingMeal : m))
-        );
-      }
-      setEditingMeal(null);
-    } catch {
-      setMeals((prev) =>
-        prev.map((m) => (m.id === editingMeal.id ? editingMeal : m))
-      );
-      setEditingMeal(null);
-    }
+  const handleDeleteMeal = async (meal: Meal) => {
+    setDeletingId(meal.id);
+    try { await deleteMeal(meal.id); setConfirmDelete(null); await loadAdminData(); }
+    catch (error) { setErrorMsg(errorMessage(error)); }
+    finally { setDeletingId(null); }
   };
 
-  // حذف وجبة من المنيو
-  const handleDeleteMeal = async (mealId: string) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الوجبة نهائياً من المنيو؟')) {
-      return;
-    }
+  const num = (v: string) => (v === '' ? null : Number(v));
+  const set = <K extends keyof MealForm>(key: K, value: MealForm[K]) => setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
 
-    setDeletingId(mealId);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from('meals').delete().eq('id', mealId);
+  const availableCount = meals.filter((m) => m.is_available).length;
+  const offersCount = meals.filter((m) => m.is_expiring_soon).length;
+  const avgOrder = stats.totalOrders > 0 ? Math.round(stats.totalRevenue / stats.totalOrders) : 0;
 
-      if (!error) {
-        setMeals((prev) => prev.filter((m) => m.id !== mealId));
-      } else {
-        // حذف محلي
-        setMeals((prev) => prev.filter((m) => m.id !== mealId));
-      }
-    } catch {
-      setMeals((prev) => prev.filter((m) => m.id !== mealId));
-    } finally {
-      setDeletingId(null);
-    }
-  };
+  const ordersShown = useCountUp(stats.totalOrders);
+  const revenueShown = useCountUp(Math.round(stats.totalRevenue), 600);
+  const availableShown = useCountUp(availableCount);
+  const offersShown = useCountUp(offersCount);
+
+  const visibleMeals = meals.filter((m) => {
+    const q = query.trim().toLowerCase();
+    if (q && !m.name_ar.toLowerCase().includes(q) && !m.name_en.toLowerCase().includes(q)) return false;
+    if (listFilter === 'available') return m.is_available;
+    if (listFilter === 'out') return !m.is_available;
+    if (listFilter === 'offers') return m.is_expiring_soon;
+    return true;
+  });
+
+  const glass =
+    'rounded-[2rem] bg-white/90 backdrop-blur border-2 border-[#E7D7C7] shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)]';
+
+  const kpis = [
+    { label: 'الطلبات', value: ordersShown.toLocaleString('en-US'), sub: `${stats.paidOrders} مدفوع`, icon: ShoppingBag, tone: 'from-[#8B1422] to-[#6B0F1A]' },
+    { label: 'الإيراد', value: `${revenueShown.toLocaleString('en-US')}`, unit: 'ج.م', sub: `متوسط ${avgOrder} ج.م`, icon: Banknote, tone: 'from-emerald-500 to-emerald-700' },
+    { label: 'المتاح', value: availableShown.toLocaleString('en-US'), unit: `من ${meals.length}`, sub: `${meals.length - availableCount} نافد`, icon: UtensilsCrossed, tone: 'from-[#E5A91E] to-[#D97706]' },
+    { label: 'العروض', value: offersShown.toLocaleString('en-US'), sub: 'بتظهر الأول', icon: Sparkles, tone: 'from-sky-500 to-sky-700' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#FFFDF9] via-[#FFF6ED] to-[#FFEDE0] text-stone-900 flex flex-col p-4 sm:p-8 space-y-8">
-      {/* الرأس */}
-      <header className="flex items-center justify-between border-b-2 border-orange-200/80 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-stone-900">لوحة تحكم مطبخ وإدارة فتح الله</h1>
-            <Badge variant="special">Admin & Kitchen</Badge>
-          </div>
-          <p className="text-xs sm:text-sm text-stone-600 mt-1 font-bold">
-            إدارة المنيو، إحصائيات المبيعات، والتحكم الفوري في توافر الوجبات بالمطبخ
-          </p>
-        </div>
+    <div className="relative min-h-screen overflow-x-clip bg-[#F8F4EE] text-[#1E1210] flex flex-col">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="anim-blob absolute -top-32 -right-24 w-[30rem] h-[30rem] rounded-full bg-[#6B0F1A]/12 blur-3xl" />
+        <div className="anim-blob-slow absolute -bottom-40 -left-28 w-[34rem] h-[34rem] rounded-full bg-[#E5A91E]/20 blur-3xl" />
+      </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={loadAdminData}>
-            <RotateCcw className="w-4 h-4 ml-1.5" />
-            تحديث
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/')}
-            className="text-stone-500 hover:text-red-600"
-          >
-            <LogOut className="w-4 h-4 ml-1.5" />
-            الرجوع للكيوسك
-          </Button>
-        </div>
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b-2 border-[#E7D7C7] px-4 sm:px-8 py-3 flex items-center gap-3">
+        <h1 dir="ltr" className="text-2xl font-black tracking-tight">
+          Smart <span className="text-[#6B0F1A]">Budget</span>
+        </h1>
+        <span className="px-4 py-1.5 rounded-full bg-[#6B0F1A] text-white text-sm font-black">الأدمن</span>
+        <div className="flex-1" />
+        <Button variant="outline" size="sm" onClick={loadAdminData} className="font-bold text-xs">
+          <RotateCcw className={`w-4 h-4 ml-1.5 ${loading ? 'animate-spin' : ''}`} />
+          تحديث
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => router.push('/')} className="font-bold text-xs text-red-700">
+          <LogOut className="w-4 h-4 ml-1.5" />
+          خروج
+        </Button>
       </header>
 
-      {/* كروت الإحصائيات (KPIs) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-stone-500 text-xs">
-            <span>إجمالي الطلبات</span>
-            <ShoppingBag className="w-4 h-4 text-[#F37A20]" />
-          </div>
-          <div className="text-2xl font-black text-stone-900">{stats.totalOrders} طلب</div>
-          <div className="text-[11px] text-emerald-600 font-semibold">
-            {stats.paidOrders > 0 ? `منها ${stats.paidOrders} مكتمل ومدفوع` : 'لا توجد طلبات مدفوعة بعد'}
-          </div>
-        </div>
+      {errorMsg && (
+        <p role="alert" className="anim-fade-up fixed top-16 left-1/2 -translate-x-1/2 z-[70] px-6 py-3 rounded-full bg-red-700 text-white font-black text-sm shadow-2xl">
+          {errorMsg}
+        </p>
+      )}
 
-        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-stone-500 text-xs">
-            <span>إجمالي الإيرادات</span>
-            <DollarSign className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-black text-stone-900">{formatEgp(stats.totalRevenue)}</div>
-          <div className="text-[11px] text-stone-500">
-            متوسط الطلب: {stats.totalOrders > 0 ? formatEgp(Math.round(stats.totalRevenue / stats.totalOrders)) : '0 ج.م'}
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-stone-500 text-xs">
-            <span>الوجبات المتوفرة</span>
-            <Flame className="w-4 h-4 text-[#F37A20]" />
-          </div>
-          <div className="text-2xl font-black text-stone-900">
-            {meals.filter((m) => m.is_available).length} من {meals.length}
-          </div>
-          <div className="text-[11px] text-amber-600 font-semibold">
-            {meals.filter((m) => !m.is_available).length} صنف غير متوفر حالياً
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-orange-100 shadow-sm space-y-2">
-          <div className="flex items-center justify-between text-stone-500 text-xs">
-            <span>عروض قرب الصلاحية</span>
-            <Sparkles className="w-4 h-4 text-[#F37A20]" />
-          </div>
-          <div className="text-2xl font-black text-[#F37A20]">
-            {meals.filter((m) => m.is_expiring_soon).length} وجبات
-          </div>
-          <div className="text-[11px] text-stone-500">تظهر في صدارة الترشيحات بالكيوسك</div>
-        </div>
-      </div>
-
-      {/* الوجبات الأكثر طلباً (Top Selling) */}
-      <div className="p-6 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 font-bold text-base text-stone-800">
-          <TrendingUp className="w-5 h-5 text-[#F37A20]" />
-          <span>الأكثر طلباً ومبيعاً (Top Selling):</span>
-        </div>
-
-        {stats.topSelling.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {stats.topSelling.map((ts, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-2xl bg-[#FFFBF7] border border-orange-100 flex items-center justify-between text-xs"
-              >
-                <div>
-                  <div className="font-bold text-stone-900">{ts.name}</div>
-                  <div className="text-stone-500 mt-0.5">{ts.sales} وجبة بيعت</div>
+      <main className="relative z-10 w-full max-w-[92rem] mx-auto px-4 sm:px-6 py-5 flex flex-col gap-5">
+        {/* المؤشرات */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.map((k, i) => (
+            <div key={k.label} className={`${glass} anim-fade-up p-4 flex items-center gap-3.5`} style={{ animationDelay: `${i * 70}ms` }}>
+              <span className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${k.tone} text-white flex items-center justify-center shrink-0 shadow-lg`}>
+                <k.icon className="w-7 h-7" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-black text-stone-500">{k.label}</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-black tabular-nums leading-tight">{k.value}</span>
+                  {k.unit && <span className="text-sm font-black text-stone-500">{k.unit}</span>}
                 </div>
-                <div className="text-emerald-600 font-black">{formatEgp(ts.revenue)}</div>
+                <div className="text-xs font-bold text-stone-400 tabular-nums">{k.sub}</div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 rounded-2xl bg-orange-50/40 border border-dashed border-orange-200 text-center text-xs text-stone-500">
-            لا توجد مبيعات مسجلة حتى الآن — يتم حساب الوجبات الأكثر مبيعاً والأعلى إيراداً تلقائياً بمجرد إتمام الطلبات في الكاشير.
-          </div>
-        )}
-      </div>
-
-      {/* جدول إدارة الوجبات والتحكم الفوري */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-orange-100 shadow-sm space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4 border-b border-orange-100 pb-4">
-          <div>
-            <h2 className="text-xl font-bold text-stone-900">إدارة وجبات المطبخ والمنيو</h2>
-            <p className="text-xs text-stone-500">
-              تحكم في توافر أي وجبة عند نفادها، أو فعّل شارة عرض التوفير للوجبات التي قاربت الصلاحية
-            </p>
-          </div>
-
-          <Button onClick={() => setShowAddModal(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            <span>إضافة وجبة جديدة</span>
-          </Button>
+            </div>
+          ))}
         </div>
 
-        {loading ? (
-          <div className="p-12 text-center text-stone-400">جاري تحميل الوجبات...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm">
-              <thead>
-                <tr className="text-xs text-stone-500 border-b border-orange-100 pb-2">
-                  <th className="pb-3 font-semibold">الوجبة</th>
-                  <th className="pb-3 font-semibold">السعر</th>
-                  <th className="pb-3 font-semibold">السعرات</th>
-                  <th className="pb-3 font-semibold">النوع</th>
-                  <th className="pb-3 font-semibold text-center">عرض قرب الصلاحية</th>
-                  <th className="pb-3 font-semibold text-center">التوافر في المطبخ</th>
-                  <th className="pb-3 font-semibold text-center">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-orange-100">
-                {meals.map((meal) => (
-                  <tr key={meal.id} className="hover:bg-orange-50/50 transition-colors">
-                    <td className="py-3.5 flex items-center gap-3">
-                      <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
-                        <Image
-                          src={meal.image_url || '/images/fathalla-logo.png'}
-                          alt={meal.name_ar}
-                          fill
-                          unoptimized
-                          className="object-cover"
-                        />
-                      </div>
-                      <div>
-                        <div className="font-bold text-stone-900">{meal.name_ar}</div>
-                        <div className="text-xs text-stone-400">{meal.name_en}</div>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5">
-                      {meal.discount_price ? (
-                        <div>
-                          <div className="font-bold text-stone-900">{formatEgp(meal.discount_price)}</div>
-                          <div className="text-xs text-stone-400 line-through">{formatEgp(meal.price)}</div>
-                        </div>
-                      ) : (
-                        <div className="font-bold text-stone-900">{formatEgp(meal.price)}</div>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 text-stone-600 font-medium">
-                      {formatKcal(meal.total_kcal)}
-                    </td>
-
-                    <td className="py-3.5 text-xs text-stone-500">
-                      {meal.portion_type === 'shareable' ? 'تشاركي' : 'فردي'} ({meal.kind})
-                    </td>
-
-                    {/* زر التبديل لعرض قرب الصلاحية */}
-                    <td className="py-3.5 text-center">
-                      <button
-                        onClick={() => handleToggleExpiringSoon(meal.id, meal.is_expiring_soon)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1 ${
-                          meal.is_expiring_soon
-                            ? 'bg-orange-100 text-[#F37A20] border border-orange-300 shadow-sm'
-                            : 'bg-stone-100 text-stone-400 hover:text-stone-700'
-                        }`}
-                      >
-                        {meal.is_expiring_soon ? (
-                          <>
-                            <Sparkles className="w-3 h-3 text-amber-500" />
-                            <span>مُفعّل كعرض توفير</span>
-                          </>
-                        ) : (
-                          'عادي'
-                        )}
-                      </button>
-                    </td>
-
-                    {/* زر التبديل للتوافر (Toggle Availability) */}
-                    <td className="py-3.5 text-center">
-                      <button
-                        onClick={() => handleToggleAvailability(meal.id, meal.is_available)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1 ${
-                          meal.is_available
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
-                            : 'bg-red-50 text-red-700 border border-red-300'
-                        }`}
-                      >
-                        {meal.is_available ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                            <span>متوفر بالمطبخ</span>
-                          </>
-                        ) : (
-                          <>
-                            <X className="w-3.5 h-3.5 stroke-[2.5]" />
-                            <span>غير متوفر (نافد)</span>
-                          </>
-                        )}
-                      </button>
-                    </td>
-
-                    {/* أزرار التعديل والحذف */}
-                    <td className="py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => setEditingMeal({ ...meal })}
-                          title="تعديل الوجبة"
-                          className="p-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-stone-700 hover:text-[#F37A20] transition-colors cursor-pointer border border-orange-100"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMeal(meal.id)}
-                          disabled={deletingId === meal.id}
-                          title="حذف الوجبة"
-                          className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer border border-red-100"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* الأكثر مبيعًا */}
+        <div className={`${glass} anim-fade-up p-4`} style={{ animationDelay: '280ms' }}>
+          <div className="flex items-center gap-2 font-black mb-3">
+            <Trophy className="w-5 h-5 text-[#E5A91E]" />
+            <span>الأكثر مبيعًا</span>
           </div>
-        )}
-      </div>
-
-      {/* نافذة إضافة وجبة جديدة (Modal) */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-orange-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-5 left-5 text-stone-400 hover:text-stone-700 p-1.5 rounded-xl bg-stone-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-xl font-bold text-stone-900 mb-4">إضافة وجبة جديدة للمنيو</h3>
-
-            <form onSubmit={handleCreateMeal} className="space-y-4">
-              <Input
-                label="اسم الوجبة بالعربي"
-                value={newMeal.name_ar}
-                onChange={(e) => setNewMeal({ ...newMeal, name_ar: e.target.value })}
-                required
-                placeholder="مثال: ساندوتش فاهيتا فراخ"
-              />
-
-              <Input
-                label="اسم الوجبة بالإنجليزي"
-                value={newMeal.name_en}
-                onChange={(e) => setNewMeal({ ...newMeal, name_en: e.target.value })}
-                placeholder="Chicken Fajita Sandwich"
-              />
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="السعر الأساسي (ج.م)"
-                  type="number"
-                  value={newMeal.price}
-                  onChange={(e) => setNewMeal({ ...newMeal, price: Number(e.target.value) })}
-                  required
-                />
-                <Input
-                  label="سعر الخصم إن وجد (ج.م)"
-                  type="number"
-                  value={newMeal.discount_price ?? ''}
-                  onChange={(e) =>
-                    setNewMeal({
-                      ...newMeal,
-                      discount_price: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                  placeholder="اختياري"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="إجمالي السعرات (Kcal)"
-                  type="number"
-                  value={newMeal.total_kcal}
-                  onChange={(e) => setNewMeal({ ...newMeal, total_kcal: Number(e.target.value) })}
-                  required
-                />
-
-                <div className="space-y-1.5 text-right">
-                  <label className="block text-sm font-semibold text-stone-700">النوع</label>
-                  <select
-                    value={newMeal.kind}
-                    onChange={(e) => setNewMeal({ ...newMeal, kind: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
-                  >
-                    <option value="main">رئيسي</option>
-                    <option value="side">جانبي</option>
-                    <option value="drink">مشروب</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* رفع الصورة أو استخدام Placeholder نظيف */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-stone-700">
-                  صورة الوجبة (رفع صورة أو استخدام الافتراضية)
-                </label>
-                <div className="flex items-center gap-3">
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
-                    <Image
-                      src={newMeal.image_url || '/images/fathalla-logo.png'}
-                      alt="Preview"
-                      fill
-                      unoptimized
-                      className="object-cover"
-                    />
+          {stats.topSelling.length > 0 ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {stats.topSelling.slice(0, 4).map((t, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-2xl bg-[#F8F4EE] border-2 border-[#E7D7C7] p-3">
+                  <span className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${i === 0 ? 'bg-[#E5A91E] text-[#3E080F]' : 'bg-white border-2 border-[#D6C7B2] text-stone-600'}`}>
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-black truncate">{t.name}</div>
+                    <div className="text-xs font-bold text-stone-500 tabular-nums">{t.sales} مبيعة</div>
                   </div>
-                  <label className="flex-1 border-2 border-dashed border-orange-200 hover:border-[#F37A20] bg-orange-50/40 rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-stone-600 flex items-center justify-center gap-2">
-                    <Upload className="w-4 h-4 text-[#F37A20]" />
-                    <span>{uploadingImage ? 'جاري الرفع...' : 'رفع صورة من الجهاز'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="font-black text-emerald-700 tabular-nums shrink-0">{formatEgp(t.revenue)}</div>
                 </div>
-                <Input
-                  label="أو رابط الصورة المباشر (URL)"
-                  type="text"
-                  placeholder="https://..."
-                  value={newMeal.image_url}
-                  onChange={(e) => setNewMeal({ ...newMeal, image_url: e.target.value })}
+              ))}
+            </div>
+          ) : (
+            <div className="py-3 text-center text-stone-400 font-bold">لا مبيعات بعد</div>
+          )}
+        </div>
+
+        {/* الوجبات */}
+        <div className={`${glass} anim-fade-up p-4 sm:p-5 flex flex-col gap-4`} style={{ animationDelay: '360ms' }}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-2xl font-black">الوجبات</h2>
+            <div className="relative flex-1 min-w-[12rem] max-w-md">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="بحث"
+                aria-label="بحث"
+                className="w-full h-12 rounded-2xl bg-white border-2 border-[#D6C7B2] pr-11 pl-4 font-bold focus:outline-none focus:border-[#6B0F1A]"
+              />
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400 pointer-events-none" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {([['all', 'الكل'], ['available', 'متاح'], ['out', 'نافد'], ['offers', 'عروض']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setListFilter(id)}
+                  className={`h-11 px-4 rounded-full border-2 font-black text-sm transition-all cursor-pointer ${
+                    listFilter === id ? 'bg-[#6B0F1A] text-white border-[#3E080F]' : 'bg-white border-[#D6C7B2] text-stone-600 hover:border-[#6B0F1A]/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1" />
+            <Button onClick={() => setForm({ ...EMPTY_FORM })} className="gap-2 font-black">
+              <Plus className="w-5 h-5 stroke-[3]" />
+              <span>إضافة</span>
+            </Button>
+          </div>
+
+          <div className="hidden lg:grid grid-cols-[3.5rem_minmax(0,1.7fr)_6.5rem_minmax(0,1.4fr)_5rem_4.5rem_4.5rem_6rem] gap-3 px-3 text-xs font-black text-stone-400">
+            <span />
+            <span>الوجبة</span>
+            <span>السعر</span>
+            <span>السعرات</span>
+            <span>النوع</span>
+            <span className="text-center">عرض</span>
+            <span className="text-center">متاح</span>
+            <span />
+          </div>
+
+          <div className="space-y-2">
+            {loading && meals.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-20 rounded-2xl bg-white/70 border-2 border-[#E7D7C7] animate-pulse" />)
+            ) : visibleMeals.length === 0 ? (
+              <div className="py-10 text-center font-black text-stone-400">مفيش وجبات</div>
+            ) : (
+              visibleMeals.map((meal, idx) => {
+                const m = getMealMacros(meal);
+                return (
+                  <div
+                    key={meal.id}
+                    className={`anim-fade-up grid grid-cols-[3.5rem_1fr_auto] lg:grid-cols-[3.5rem_minmax(0,1.7fr)_6.5rem_minmax(0,1.4fr)_5rem_4.5rem_4.5rem_6rem] items-center gap-3 rounded-2xl border-2 px-3 py-2.5 transition-colors ${
+                      meal.is_available ? 'bg-white border-[#E7D7C7] hover:border-[#6B0F1A]/40' : 'bg-stone-50 border-stone-200 opacity-75'
+                    }`}
+                    style={{ animationDelay: `${Math.min(idx, 10) * 25}ms` }}
+                  >
+                    <span className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-200">
+                      <Image src={meal.image_url || '/images/meal-placeholder.svg'} alt="" fill unoptimized className="object-cover" />
+                    </span>
+
+                    <div className="min-w-0">
+                      <div className="font-black truncate">{meal.name_ar}</div>
+                      <div dir="ltr" className="text-xs text-stone-400 truncate text-right">{meal.name_en}</div>
+                    </div>
+
+                    <div className="lg:contents flex items-center gap-2 col-span-3 lg:col-span-1 order-last lg:order-none flex-wrap pt-1 lg:pt-0 border-t border-[#EADBCB] lg:border-0">
+                      <div className="font-black tabular-nums leading-tight">
+                        {meal.discount_price ? (
+                          <>
+                            <div className="text-[#6B0F1A]">{formatEgp(meal.discount_price)}</div>
+                            <div className="text-xs text-stone-400 line-through">{formatEgp(meal.price)}</div>
+                          </>
+                        ) : (
+                          <div className="text-[#6B0F1A]">{formatEgp(meal.price)}</div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 text-sm font-black tabular-nums text-stone-600">
+                          <Flame className="w-3.5 h-3.5 text-[#E5A91E]" />
+                          {formatKcal(meal.total_kcal)}
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] font-black tabular-nums mt-0.5">
+                          <span className="px-1.5 rounded bg-amber-50 text-amber-800">{m.estimated ? '~' : ''}{Math.round(m.carbsG)}</span>
+                          <span className="px-1.5 rounded bg-rose-50 text-rose-800">{m.estimated ? '~' : ''}{Math.round(m.proteinG)}</span>
+                          <span className="px-1.5 rounded bg-sky-50 text-sky-800">{m.estimated ? '~' : ''}{Math.round(m.fatG)}</span>
+                        </div>
+                      </div>
+
+                      <span className="text-xs font-black text-stone-500">
+                        {KIND_LABEL[meal.kind] ?? meal.kind}
+                        {meal.portion_type === 'shareable' && <span className="block text-[#6B0F1A]">تشاركي</span>}
+                      </span>
+
+                      <div className="flex justify-center">
+                        <Switch on={meal.is_expiring_soon} onChange={() => handleToggleExpiringSoon(meal.id, meal.is_expiring_soon)} label="عرض" tone="amber" />
+                      </div>
+                      <div className="flex justify-center">
+                        <Switch on={meal.is_available} onChange={() => handleToggleAvailability(meal.id, meal.is_available)} label="متاح" />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 row-start-1 col-start-3 lg:row-auto lg:col-auto">
+                      <button
+                        type="button"
+                        aria-label="تعديل"
+                        onClick={() => setForm({ ...EMPTY_FORM, ...meal, discount_price: meal.discount_price ?? null, carbs_g: meal.carbs_g ?? null, protein_g: meal.protein_g ?? null, fat_g: meal.fat_g ?? null })}
+                        className="w-11 h-11 rounded-xl bg-[#F8F4EE] border-2 border-[#E7D7C7] text-stone-700 hover:text-[#6B0F1A] hover:border-[#6B0F1A]/50 transition-colors cursor-pointer flex items-center justify-center"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="حذف"
+                        disabled={deletingId === meal.id}
+                        onClick={() => setConfirmDelete(meal)}
+                        className="w-11 h-11 rounded-xl bg-red-50 border-2 border-red-100 text-red-600 hover:bg-red-100 transition-colors cursor-pointer flex items-center justify-center"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* نافذة الإضافة / التعديل */}
+      {form && (
+        <div className="fixed inset-0 z-50 bg-[#1E1210]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="anim-fade-up bg-white border-2 border-[#6B0F1A] rounded-[2rem] w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl relative"
+          >
+            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur flex items-center gap-3 px-6 py-4 border-b-2 border-[#EADBCB]">
+              <h3 className="text-2xl font-black flex-1">{form.id ? 'تعديل' : 'وجبة جديدة'}</h3>
+              <button type="button" aria-label="إغلاق" onClick={() => setForm(null)} className="w-10 h-10 rounded-full bg-stone-100 text-stone-500 hover:text-stone-800 cursor-pointer flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-[13rem_1fr] gap-6">
+              <div className="flex flex-col gap-3">
+                <div className="relative aspect-square rounded-3xl overflow-hidden bg-stone-100 border-2 border-[#E7D7C7]">
+                  <Image src={form.image_url || '/images/meal-placeholder.svg'} alt="" fill unoptimized className="object-cover" />
+                  {uploading && (
+                    <span className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                      <span className="w-8 h-8 border-4 border-[#6B0F1A] border-t-transparent rounded-full animate-spin" />
+                    </span>
+                  )}
+                </div>
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageUpload} className="hidden" />
+                <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} className="gap-2 font-black">
+                  <Upload className="w-5 h-5" />
+                  <span>رفع صورة</span>
+                </Button>
+                <input
+                  value={form.image_url}
+                  onChange={(e) => set('image_url', e.target.value)}
+                  placeholder="رابط الصورة"
+                  aria-label="رابط الصورة"
+                  dir="ltr"
+                  className={`${FIELD} h-11 text-sm`}
                 />
               </div>
 
-              {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
-              <label className="flex items-center gap-3 p-3.5 rounded-xl bg-orange-50/60 border border-orange-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newMeal.is_expiring_soon}
-                  onChange={(e) => setNewMeal({ ...newMeal, is_expiring_soon: e.target.checked })}
-                  className="w-4 h-4 accent-[#F37A20]"
-                />
-                <span className="text-xs text-stone-700 font-bold inline-flex items-center gap-1">
-                  <span>تحديد كوجبة قربت صلاحيتها (عرض توفير طازج يتصدر الترشيحات بالكيوسك)</span>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                </span>
-              </label>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Labeled label="الاسم">
+                    <input required value={form.name_ar} onChange={(e) => set('name_ar', e.target.value)} className={FIELD} placeholder="ساندوتش فاهيتا" />
+                  </Labeled>
+                  <Labeled label="الاسم (EN)">
+                    <input dir="ltr" value={form.name_en} onChange={(e) => set('name_en', e.target.value)} className={FIELD} placeholder="Fajita sandwich" />
+                  </Labeled>
+                </div>
 
-              <Button type="submit" size="lg" className="w-full mt-4">
-                حفظ وإضافة الوجبة
+                <div className="grid grid-cols-3 gap-4">
+                  <Labeled label="السعر">
+                    <input required type="number" min={0} step="any" value={form.price} onChange={(e) => set('price', Number(e.target.value))} className={FIELD} />
+                  </Labeled>
+                  <Labeled label="سعر الخصم">
+                    <input type="number" min={0} step="any" value={form.discount_price ?? ''} onChange={(e) => set('discount_price', num(e.target.value))} placeholder="بدون" className={FIELD} />
+                  </Labeled>
+                  <Labeled label="السعرات">
+                    <input required type="number" min={0} value={form.total_kcal} onChange={(e) => set('total_kcal', Number(e.target.value))} className={FIELD} />
+                  </Labeled>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  {([['carbs_g', 'كارب (جم)'], ['protein_g', 'بروتين (جم)'], ['fat_g', 'دهون (جم)']] as const).map(([key, label]) => (
+                    <Labeled key={key} label={label}>
+                      <input type="number" min={0} step="any" value={form[key] ?? ''} onChange={(e) => set(key, num(e.target.value))} placeholder="تقديري" className={FIELD} />
+                    </Labeled>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-black text-stone-600 px-0.5">النوع</span>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {KINDS.map((k) => (
+                        <button
+                          key={k.id}
+                          type="button"
+                          onClick={() => set('kind', k.id)}
+                          className={`h-12 rounded-xl border-2 font-black text-sm transition-all cursor-pointer ${form.kind === k.id ? 'bg-[#6B0F1A] text-white border-[#3E080F]' : 'bg-white border-[#D6C7B2] text-stone-600 hover:border-[#6B0F1A]/50'}`}
+                        >
+                          {k.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-black text-stone-600 px-0.5">التقديم</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([['individual', 'فردي'], ['shareable', 'تشاركي']] as const).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => set('portion_type', id)}
+                          className={`h-12 rounded-xl border-2 font-black text-sm transition-all cursor-pointer ${form.portion_type === id ? 'bg-[#6B0F1A] text-white border-[#3E080F]' : 'bg-white border-[#D6C7B2] text-stone-600 hover:border-[#6B0F1A]/50'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 items-end">
+                  <Labeled label="عدد الحصص">
+                    <input type="number" min={1} max={30} value={form.servings} onChange={(e) => set('servings', Number(e.target.value))} className={FIELD} />
+                  </Labeled>
+                  <div className="flex items-center justify-between h-12 rounded-xl border-2 border-[#D6C7B2] px-3.5">
+                    <span className="font-black text-sm flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-[#E5A91E]" />
+                      عرض
+                    </span>
+                    <Switch on={form.is_expiring_soon} onChange={() => set('is_expiring_soon', !form.is_expiring_soon)} label="عرض" tone="amber" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur flex items-center gap-3 px-6 py-4 border-t-2 border-[#EADBCB]">
+              <Button type="submit" size="lg" variant="primary" disabled={saving || uploading} className="flex-1 font-black text-lg">
+                {saving ? '...' : 'حفظ'}
               </Button>
-            </form>
-          </div>
+              <Button type="button" size="lg" variant="outline" onClick={() => setForm(null)} className="font-black">
+                إلغاء
+              </Button>
+            </div>
+          </form>
         </div>
       )}
 
-      {/* نافذة تعديل وجبة موجودة (Edit Modal) */}
-      {editingMeal && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-orange-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setEditingMeal(null)}
-              className="absolute top-5 left-5 text-stone-400 hover:text-stone-700 p-1.5 rounded-xl bg-stone-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-xl font-bold text-stone-900 mb-4">تعديل بيانات الوجبة</h3>
-
-            <form onSubmit={handleUpdateMeal} className="space-y-4">
-              <Input
-                label="اسم الوجبة بالعربي"
-                value={editingMeal.name_ar}
-                onChange={(e) => setEditingMeal({ ...editingMeal, name_ar: e.target.value })}
-                required
-              />
-
-              <Input
-                label="اسم الوجبة بالإنجليزي"
-                value={editingMeal.name_en}
-                onChange={(e) => setEditingMeal({ ...editingMeal, name_en: e.target.value })}
-              />
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="السعر الأساسي (ج.م)"
-                  type="number"
-                  value={editingMeal.price}
-                  onChange={(e) => setEditingMeal({ ...editingMeal, price: Number(e.target.value) })}
-                  required
-                />
-                <Input
-                  label="سعر الخصم إن وجد (ج.م)"
-                  type="number"
-                  value={editingMeal.discount_price ?? ''}
-                  onChange={(e) =>
-                    setEditingMeal({
-                      ...editingMeal,
-                      discount_price: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                  placeholder="بدون خصم"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="إجمالي السعرات (Kcal)"
-                  type="number"
-                  value={editingMeal.total_kcal}
-                  onChange={(e) =>
-                    setEditingMeal({ ...editingMeal, total_kcal: Number(e.target.value) })
-                  }
-                  required
-                />
-
-                <div className="space-y-1.5 text-right">
-                  <label className="block text-sm font-semibold text-stone-700">النوع</label>
-                  <select
-                    value={editingMeal.kind}
-                    onChange={(e) =>
-                      setEditingMeal({ ...editingMeal, kind: e.target.value as any })
-                    }
-                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
-                  >
-                    <option value="main">رئيسي</option>
-                    <option value="side">جانبي</option>
-                    <option value="drink">مشروب</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-semibold text-stone-700">نوع التقديم</label>
-                <select
-                  value={editingMeal.portion_type}
-                  onChange={(e) =>
-                    setEditingMeal({ ...editingMeal, portion_type: e.target.value as any })
-                  }
-                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-stone-800 text-sm focus:outline-none focus:border-[#F37A20]"
-                >
-                  <option value="individual">فردي (وجبة لشخص)</option>
-                  <option value="shareable">تشاركي (صواني عائلية)</option>
-                </select>
-              </div>
-
-              {/* تعديل أو رفع صورة الوجبة */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-stone-700">
-                  صورة الوجبة (رفع صورة جديدة أو تغيير الرابط)
-                </label>
-                <div className="flex items-center gap-3">
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-orange-50 border border-orange-200 flex-shrink-0">
-                    <Image
-                      src={editingMeal.image_url || '/images/fathalla-logo.png'}
-                      alt="Preview"
-                      fill
-                      unoptimized
-                      className="object-cover"
-                    />
-                  </div>
-                  <label className="flex-1 border-2 border-dashed border-orange-200 hover:border-[#F37A20] bg-orange-50/40 rounded-xl p-3 text-center cursor-pointer transition-colors text-xs text-stone-600 flex items-center justify-center gap-2">
-                    <Upload className="w-4 h-4 text-[#F37A20]" />
-                    <span>{uploadingEditImage ? 'جاري الرفع...' : 'رفع صورة جديدة من الجهاز'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleEditImageUpload}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <Input
-                  label="أو رابط الصورة المباشر (URL)"
-                  type="text"
-                  placeholder="https://..."
-                  value={editingMeal.image_url || ''}
-                  onChange={(e) =>
-                    setEditingMeal({ ...editingMeal, image_url: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* تحديد ما إذا كانت أوشكت على الصلاحية */}
-              <label className="flex items-center gap-3 p-3.5 rounded-xl bg-orange-50/60 border border-orange-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editingMeal.is_expiring_soon}
-                  onChange={(e) =>
-                    setEditingMeal({ ...editingMeal, is_expiring_soon: e.target.checked })
-                  }
-                  className="w-4 h-4 accent-[#F37A20]"
-                />
-                <span className="text-xs text-stone-700 font-bold inline-flex items-center gap-1">
-                  <span>تحديد كوجبة قربت صلاحيتها (عرض توفير طازج)</span>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                </span>
-              </label>
-
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" size="lg" className="flex-1">
-                  حفظ التعديلات
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => setEditingMeal(null)}
-                >
-                  إلغاء
-                </Button>
-              </div>
-            </form>
+      {/* تأكيد الحذف */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[60] bg-[#1E1210]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="anim-fade-up bg-white border-2 border-red-300 rounded-[2rem] p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <span className="mx-auto w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+              <Trash2 className="w-8 h-8" />
+            </span>
+            <h3 className="text-xl font-black">حذف الصنف من المنيو؟</h3>
+            <p className="font-bold text-stone-500 truncate">{confirmDelete.name_ar}</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleDeleteMeal(confirmDelete)}
+                disabled={deletingId === confirmDelete.id}
+                className="flex-1 h-14 rounded-2xl bg-red-600 text-white font-black text-lg border-2 border-red-800 shadow-[0_4px_0_0_#991b1b] active:translate-y-1 active:shadow-none transition-all cursor-pointer"
+              >
+                {deletingId === confirmDelete.id ? '...' : 'حذف'}
+              </button>
+              <Button type="button" variant="outline" size="lg" onClick={() => setConfirmDelete(null)} className="font-black">
+                إلغاء
+              </Button>
+            </div>
           </div>
         </div>
       )}

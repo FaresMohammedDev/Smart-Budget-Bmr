@@ -40,11 +40,16 @@ export function calculateGroupShares(
     const qty = item.quantity;
     const totalItemKcal = meal.total_kcal * qty;
 
-    if (meal.portion_type === 'shareable' || qty < people.length) {
+    if (meal.portion_type === 'shareable') {
       // صواني أو أطباق تشاركية عائلية، أو وجبات فردية عددها أقل من عدد أفراد الجروب -> تقسيم تناسبي عادل
+      const exactCalories = normalizedPeople.map(p => totalItemKcal * p.ratio);
+      const calorieUnits = exactCalories.map(Math.floor);
+      const calorieRemainders = exactCalories.map((v, i) => ({ i, fraction: v - Math.floor(v) })).sort((a,b) => b.fraction - a.fraction);
+      const remainingCalories = Math.round(totalItemKcal) - calorieUnits.reduce((a,b) => a+b, 0);
+      for (let i = 0; i < remainingCalories; i++) calorieUnits[calorieRemainders[i].i]++;
       shares.forEach((personShare, idx) => {
         const pRatio = normalizedPeople[idx]!.ratio;
-        const personKcal = Math.round(totalItemKcal * pRatio);
+        const personKcal = calorieUnits[idx];
         personShare.shareKcal += personKcal;
         
         let desc = '';
@@ -65,7 +70,7 @@ export function calculateGroupShares(
       // أصناف فردية تكفي أو تزيد عن عدد الأفراد (ساندوتشات / وجبات) -> Largest Remainder Method بوحدات صحيحة
       const exactQuotas = normalizedPeople.map((p) => p.ratio * qty);
       const integerUnits = exactQuotas.map((q) => Math.floor(q));
-      let distributedUnits = integerUnits.reduce((sum, u) => sum + u, 0);
+      const distributedUnits = integerUnits.reduce((sum, u) => sum + u, 0);
       let remainderToDistribute = qty - distributedUnits;
 
       // ترتيب الأفراد حسب الكسر الأكبر للحصول على باقي الوحدات

@@ -49,7 +49,7 @@ export function getMealImageUrl(mealNameAr?: string, existingUrl?: string | null
     existingUrl &&
     !existingUrl.includes('meal-placeholder') &&
     !existingUrl.includes('fathalla-logo') &&
-    existingUrl.startsWith('http')
+    (existingUrl.startsWith('http') || existingUrl.startsWith('data:image/') || existingUrl.startsWith('/'))
   ) {
     return existingUrl;
   }

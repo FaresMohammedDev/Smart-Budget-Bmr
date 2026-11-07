@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { calculateBmr } from '../domain/bmr';
 import { calculateTdee } from '../domain/tdee';
-import {
-  calculateTargetMealKcal,
-  getDefaultMealTime,
-  MEAL_FRACTIONS,
-} from '../domain/meal-fraction';
+import { calculateTargetMealKcal, getDefaultMealTime } from '../domain/meal-fraction';
+import { calculateMacroTargets, getMealMacros, sumMealMacros } from '../domain/macros';
+import { RICH_FATHALLA_MEALS } from '@/lib/meals-data';
 
 describe('BMR Calculation (Mifflin-St Jeor)', () => {
   it('يحسب BMR للرجال بدقة', () => {
@@ -49,5 +47,45 @@ describe('Meal Fraction & Smart Time', () => {
     expect(getDefaultMealTime(8)).toBe('breakfast');
     expect(getDefaultMealTime(14)).toBe('lunch');
     expect(getDefaultMealTime(21)).toBe('dinner');
+  });
+});
+
+describe('Macro targets', () => {
+  it('يوزع السعرات 50/20/30 ويحوّلها لجرامات', () => {
+    // 2000 سعرة: كارب 1000/4=250، بروتين 400/4=100، دهون 600/9≈67
+    expect(calculateMacroTargets(2000)).toEqual({ carbsG: 250, proteinG: 100, fatG: 67 });
+  });
+
+  it('يرجع أصفار لو السعرات غير صالحة', () => {
+    expect(calculateMacroTargets(0)).toEqual({ carbsG: 0, proteinG: 0, fatG: 0 });
+    expect(calculateMacroTargets(NaN)).toEqual({ carbsG: 0, proteinG: 0, fatG: 0 });
+  });
+});
+
+describe('Meal macros', () => {
+  it('يستخدم الأرقام المسجلة للوجبة ولا يعتبرها تقديرية', () => {
+    expect(getMealMacros({ total_kcal: 500, carbs_g: 50, protein_g: 30, fat_g: 20 })).toEqual({ carbsG: 50, proteinG: 30, fatG: 20, estimated: false });
+  });
+
+  it('يقدّر الماكروز من السعرات والنوع لو مش مسجلة', () => {
+    const m = getMealMacros({ total_kcal: 600, kind: 'main' });
+    expect(m.estimated).toBe(true);
+    expect(m.carbsG * 4 + m.proteinG * 4 + m.fatG * 9).toBeGreaterThan(560);
+    expect(m.carbsG * 4 + m.proteinG * 4 + m.fatG * 9).toBeLessThan(640);
+  });
+
+  it('يجمع ماكروز الكميات', () => {
+    const meal = { total_kcal: 400, carbs_g: 40, protein_g: 20, fat_g: 15 };
+    expect(sumMealMacros([{ meal, quantity: 2 }])).toEqual({ carbsG: 80, proteinG: 40, fatG: 30, estimated: false });
+  });
+
+  it('كل وجبات المنيو لها ماكروز تتماشى مع سعراتها', () => {
+    for (const meal of RICH_FATHALLA_MEALS) {
+      expect(meal.carbs_g, meal.name_ar).not.toBeNull();
+      const m = getMealMacros(meal);
+      expect(m.estimated, meal.name_ar).toBe(false);
+      const kcal = m.carbsG * 4 + m.proteinG * 4 + m.fatG * 9;
+      expect(Math.abs(kcal - meal.total_kcal), meal.name_ar).toBeLessThanOrEqual(Math.max(8, meal.total_kcal * 0.04));
+    }
   });
 });

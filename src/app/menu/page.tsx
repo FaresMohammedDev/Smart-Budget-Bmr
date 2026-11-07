@@ -1,433 +1,386 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   ShoppingBag,
-  Flame,
   Plus,
   Minus,
   Trash2,
-  Printer,
-  Sparkles,
-  ArrowRight,
-  Filter,
-  Check,
-  UtensilsCrossed,
   Tag,
   CupSoda,
   Layers,
-  Zap,
   SunMedium,
   Cookie,
+  Flame,
+  UtensilsCrossed,
+  Sparkles,
+  Printer,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { useCountUp } from '@/components/people/KcalRing';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
 import { Meal } from '@/features/recommendations/domain/types';
+import { getMealMacros, sumMealMacros } from '@/features/nutrition/domain/macros';
 import { formatEgp, formatKcal } from '@/lib/format';
-import { createClient } from '@/lib/supabase/client';
 import { getMealImageUrl } from '@/lib/meal-images';
-import { RICH_FATHALLA_MEALS } from '@/lib/meals-data';
+import { listMeals, createOrder, errorMessage } from '@/lib/data/repository';
+
+type CategoryId = 'all' | 'offers' | 'breakfast' | 'sandwiches' | 'main' | 'side' | 'dessert' | 'drink';
+
+const CATEGORIES: { id: CategoryId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'all', label: 'الكل', icon: Layers },
+  { id: 'offers', label: 'عروض', icon: Tag },
+  { id: 'breakfast', label: 'فطار', icon: SunMedium },
+  { id: 'sandwiches', label: 'ساندوتشات', icon: UtensilsCrossed },
+  { id: 'main', label: 'مشويات', icon: Flame },
+  { id: 'side', label: 'جانبي', icon: Sparkles },
+  { id: 'dessert', label: 'حلويات', icon: Cookie },
+  { id: 'drink', label: 'مشروبات', icon: CupSoda },
+];
+
+const BREAKFAST_WORDS = ['فول', 'طعمية', 'بيض', 'شكشوكة', 'فطير', 'جبن'];
+
+function matches(cat: CategoryId, m: Meal): boolean {
+  const has = (words: string[]) => words.some((w) => m.name_ar.includes(w));
+  switch (cat) {
+    case 'all':
+      return true;
+    case 'offers':
+      return Boolean(m.is_expiring_soon || (m.discount_price && m.discount_price < m.price));
+    case 'breakfast':
+      return has(BREAKFAST_WORDS);
+    case 'sandwiches':
+      return has(['ساندوتش', 'شاورما', 'حواوشي', 'برجر']);
+    case 'main':
+      return m.kind === 'main' && !has([...BREAKFAST_WORDS.slice(0, 4), 'ساندوتش']);
+    default:
+      return m.kind === cat;
+  }
+}
 
 export default function MenuEcommercePage() {
   const router = useRouter();
-  const {
-    cart,
-    addToCart,
-    removeFromCart,
-    updateCartQuantity,
-    clearCart,
-    getCartTotal,
-  } = usePlannerStore();
+  const { cart, addToCart, updateCartQuantity, clearCart, syncCartMeals, getCartTotal } = usePlannerStore();
 
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>('all');
   const [loading, setLoading] = useState(true);
   const [ordering, setOrdering] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const requestRef = useRef<{ key: string; id: string } | null>(null);
+  const busy = useRef(false);
 
-  // جلب الوجبات ودمجها مع قائمة فتح الله الغنية (34+ وجبة تشمل فطور، غداء، عشاء، سناكس)
+  // قراءة المنيو من مصدر البيانات المحدد، وتحديثه عند العودة من الإدارة.
   useEffect(() => {
     async function loadMenu() {
       setLoading(true);
       try {
-        const supabase = createClient();
-        const { data: dbMeals } = await supabase
-          .from('meals')
-          .select('*, meal_items(quantity, food_items(*))')
-          .eq('is_available', true);
-
-        const dbMap = new Map((dbMeals || []).map((m: any) => [m.name_ar, m]));
-
-        // دمج وجبات قاعدة البيانات مع القائمة الغنية المتكاملة
-        const combined: Meal[] = RICH_FATHALLA_MEALS.map((richMeal) => {
-          const dbMatch = dbMap.get(richMeal.name_ar);
-          if (dbMatch) {
-            return {
-              ...richMeal,
-              id: dbMatch.id,
-              price: Number(dbMatch.price),
-              discount_price: dbMatch.discount_price ? Number(dbMatch.discount_price) : null,
-              is_expiring_soon: Boolean(dbMatch.is_expiring_soon),
-            };
-          }
-          return richMeal;
-        });
-
-        setMeals(combined);
-      } catch {
-        setMeals(RICH_FATHALLA_MEALS);
+        const menu = await listMeals(true);
+        setMeals(menu);
+        syncCartMeals(menu);
+        setErrorMsg('');
+      } catch (error) {
+        setErrorMsg(errorMessage(error));
       } finally {
         setLoading(false);
       }
     }
 
     loadMenu();
-  }, []);
+    window.addEventListener('focus', loadMenu);
+    window.addEventListener('storage', loadMenu);
+    return () => {
+      window.removeEventListener('focus', loadMenu);
+      window.removeEventListener('storage', loadMenu);
+    };
+  }, [syncCartMeals]);
 
-  const filteredMeals = meals.filter((m) => {
-    if (selectedCategory === 'all') return true;
-    if (selectedCategory === 'offers') return m.is_expiring_soon || (m.discount_price && m.discount_price < m.price);
-    if (selectedCategory === 'breakfast') {
-      return (
-        m.name_ar.includes('فول') ||
-        m.name_ar.includes('طعمية') ||
-        m.name_ar.includes('بيض') ||
-        m.name_ar.includes('شكشوكة') ||
-        m.name_ar.includes('فطير') ||
-        m.name_ar.includes('جبن')
-      );
-    }
-    if (selectedCategory === 'sandwiches') {
-      return (
-        m.name_ar.includes('ساندوتش') ||
-        m.name_ar.includes('شاورما') ||
-        m.name_ar.includes('حواوشي') ||
-        m.name_ar.includes('برجر')
-      );
-    }
-    if (selectedCategory === 'main') {
-      return (
-        m.kind === 'main' &&
-        !m.name_ar.includes('فول') &&
-        !m.name_ar.includes('طعمية') &&
-        !m.name_ar.includes('بيض') &&
-        !m.name_ar.includes('شكشوكة') &&
-        !m.name_ar.includes('ساندوتش')
-      );
-    }
-    if (selectedCategory === 'side') return m.kind === 'side';
-    if (selectedCategory === 'dessert') return m.kind === 'dessert';
-    if (selectedCategory === 'drink') return m.kind === 'drink';
-    return m.kind === selectedCategory;
-  });
+  const visibleCategories = CATEGORIES.filter((c) => c.id === 'all' || meals.some((m) => matches(c.id, m)));
+  const filteredMeals = meals.filter((m) => matches(selectedCategory, m));
 
   const { totalPrice, totalKcal } = getCartTotal();
   const totalCartCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const cartMacros = sumMealMacros(cart);
+  const priceShown = useCountUp(totalPrice, 400);
 
   // إتمام الشراء المباشر وطباعة البون
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || busy.current) return;
+    busy.current = true;
     setOrdering(true);
-
+    setErrorMsg('');
     try {
-      const supabase = createClient();
-      const itemsPayload = cart.map((c) => ({
-        meal_id: c.meal.id,
-        quantity: c.quantity,
-      }));
-
-      const { data: orderId, error } = await supabase.rpc('create_order', {
-        p_payload: {
-          budget: totalPrice,
-          order_mode: 'quick_menu',
-          items: itemsPayload,
-          people: [],
-        },
-      });
-
-      if (error) throw error;
+      const items = cart.map((c) => ({ meal_id: c.meal.id, quantity: c.quantity }));
+      const key = JSON.stringify(items);
+      if (requestRef.current?.key !== key) requestRef.current = { key, id: crypto.randomUUID() };
+      const orderId = await createOrder({ requestId: requestRef.current.id, mode: 'quick_menu', items, expectedTotal: totalPrice });
       clearCart();
       router.push(`/receipt/${orderId}`);
-    } catch {
-      const fallbackId = `quick-${Date.now()}`;
-      clearCart();
-      router.push(`/receipt/${fallbackId}`);
+    } catch (error) {
+      setErrorMsg(errorMessage(error));
     } finally {
+      busy.current = false;
       setOrdering(false);
     }
   };
 
+  const glass =
+    'rounded-[2rem] bg-white/90 backdrop-blur border-2 border-[#E7D7C7] shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)]';
+
   return (
-    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
+    <div className="relative min-h-screen lg:h-screen overflow-x-clip lg:overflow-hidden bg-[#F8F4EE] text-[#1E1210] flex flex-col select-none">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="anim-blob absolute -top-32 -right-24 w-[30rem] h-[30rem] rounded-full bg-[#6B0F1A]/12 blur-3xl" />
+        <div className="anim-blob-slow absolute -bottom-40 -left-28 w-[34rem] h-[34rem] rounded-full bg-[#E5A91E]/20 blur-3xl" />
+      </div>
+
       <KioskHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-8 space-y-8">
-        {/* شريط العنوان والتصنيفات */}
-        <div className="flex items-center justify-between flex-wrap gap-4 border-b-2 border-[#E7D7C7] pb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-black text-[#1E1210] flex items-center gap-2">
-                <UtensilsCrossed className="w-8 h-8 text-[#6B0F1A] stroke-[2.25]" />
-                <span>منيو وجبات فتح الله ماركت ({meals.length} وجبة)</span>
-              </h1>
-              <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-[#6B0F1A] text-white font-extrabold shadow-sm">
-                <Flame className="w-3.5 h-3.5 text-amber-300 stroke-[2.25]" />
-                <span>طازج وساخن فوراً</span>
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-stone-600 mt-1 font-bold">
-              اطلب وجباتك المفضلة مباشرة مع توضيح السعرات الحرارية والأسعار بدقة
-            </p>
-          </div>
+      {errorMsg && (
+        <p
+          role="alert"
+          className="anim-fade-up fixed top-20 left-1/2 -translate-x-1/2 z-[60] px-6 py-3 rounded-full bg-red-700 text-white font-black text-sm shadow-2xl"
+        >
+          {errorMsg}
+        </p>
+      )}
 
-          {/* تبويبات الأقسام مع أيقونات SVG نقية بارزة 3D */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
-            {[
-              { id: 'all', label: `الكل (${meals.length})`, icon: <Layers className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'offers', label: 'عروض التوفير', icon: <Tag className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'breakfast', label: 'فطور مصري طازج', icon: <SunMedium className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'sandwiches', label: 'شاورما وساندوتشات', icon: <UtensilsCrossed className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'main', label: 'مشويات وصواني', icon: <Flame className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'side', label: 'أطباق جانبية وسلطات', icon: <Sparkles className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'dessert', label: 'حلويات شرقية', icon: <Cookie className="w-4 h-4 stroke-[2.25]" /> },
-              { id: 'drink', label: 'عصائر ومشروبات', icon: <CupSoda className="w-4 h-4 stroke-[2.25]" /> },
-            ].map((cat) => (
+      <main className="relative z-10 flex-1 min-h-0 w-full max-w-[92rem] mx-auto px-4 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-[10.5rem_1fr_20rem] gap-4">
+        {/* الأقسام */}
+        <nav
+          aria-label="الأقسام"
+          className="anim-fade-up lg:min-h-0 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto lg:rounded-[2rem] lg:bg-white/90 lg:border-2 lg:border-[#E7D7C7] lg:p-3 lg:shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)]"
+        >
+          {visibleCategories.map(({ id, label, icon: Icon }, i) => {
+            const on = selectedCategory === id;
+            const count = meals.filter((m) => matches(id, m)).length;
+            return (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3.5 py-2.5 rounded-2xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  selectedCategory === cat.id
-                    ? 'bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-[0_4px_0_0_#3E080F] -translate-y-0.5'
-                    : 'bg-white text-stone-800 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
+                key={id}
+                type="button"
+                onClick={() => setSelectedCategory(id)}
+                className={`anim-fade-up shrink-0 lg:w-full rounded-2xl border-2 px-3 py-2.5 flex lg:flex-col items-center gap-2 lg:gap-1 transition-all duration-300 cursor-pointer ${
+                  on
+                    ? 'bg-gradient-to-b from-[#8B1422] to-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F] -translate-y-0.5'
+                    : 'bg-white border-[#E7D7C7] text-stone-700 hover:border-[#6B0F1A]/50'
                 }`}
+                style={{ animationDelay: `${60 + i * 45}ms` }}
               >
-                {cat.icon}
-                <span>{cat.label}</span>
+                <Icon className="w-6 h-6 lg:w-7 lg:h-7" />
+                <span className="font-black text-sm">{label}</span>
+                <span className={`text-xs font-black px-2 py-0.5 rounded-full tabular-nums ${on ? 'bg-white/20' : 'bg-[#F8F4EE] text-[#6B0F1A]'}`}>
+                  {count}
+                </span>
               </button>
-            ))}
-          </div>
-        </div>
+            );
+          })}
+        </nav>
 
-        {/* شبكة الوجبات وسلة الشراء */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* قسم الوجبات */}
-          <div className="lg:col-span-2">
-            {loading ? (
-              <div className="p-16 text-center space-y-4">
-                <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-stone-700 font-black">جاري تحميل أشهى الوجبات الطازجة...</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {filteredMeals.map((meal) => {
-                  const cartItem = cart.find((i) => i.meal.id === meal.id);
-                  const qty = cartItem ? cartItem.quantity : 0;
-                  const price = meal.discount_price ?? meal.price;
+        {/* شبكة الوجبات */}
+        <section className="lg:min-h-0 lg:overflow-y-auto -mx-1 px-1 py-1" aria-label="الوجبات">
+          {loading && meals.length === 0 ? (
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-72 rounded-[1.75rem] bg-white/70 border-2 border-[#E7D7C7] animate-pulse" />
+              ))}
+            </div>
+          ) : filteredMeals.length === 0 ? (
+            <div className={`${glass} p-10 text-center text-stone-500 font-black`}>مفيش وجبات</div>
+          ) : (
+            <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 pb-2">
+              {filteredMeals.map((meal, idx) => {
+                const qty = cart.find((i) => i.meal.id === meal.id)?.quantity ?? 0;
+                const m = getMealMacros(meal);
+                const hasDiscount = meal.discount_price != null && meal.discount_price < meal.price;
+                const price = meal.discount_price ?? meal.price;
+                return (
+                  <article
+                    key={meal.id}
+                    className={`anim-fade-up group relative flex flex-col overflow-hidden rounded-[1.75rem] bg-white border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+                      qty > 0 ? 'border-[#6B0F1A] shadow-lg' : 'border-[#E7D7C7]'
+                    }`}
+                    style={{ animationDelay: `${Math.min(idx, 12) * 40}ms` }}
+                  >
+                    <div className="relative aspect-[16/10] overflow-hidden bg-stone-200">
+                      <Image
+                        src={getMealImageUrl(meal.name_ar, meal.image_url)}
+                        alt={meal.name_ar}
+                        fill
+                        unoptimized
+                        sizes="(min-width: 1280px) 22vw, 40vw"
+                        className="object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent" />
+                      {meal.is_expiring_soon && (
+                        <span className="absolute top-2.5 right-2.5 flex items-center gap-1 px-3 py-1 rounded-full bg-[#E5A91E] text-[#3E080F] text-xs font-black shadow-md">
+                          <Tag className="w-3.5 h-3.5" />
+                          عرض
+                        </span>
+                      )}
+                      <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/55 backdrop-blur text-white text-xs font-black tabular-nums">
+                        <Flame className="w-3.5 h-3.5 text-[#E5A91E]" />
+                        {formatKcal(meal.total_kcal)}
+                      </span>
+                      {meal.portion_type === 'shareable' && (
+                        <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded-full bg-white/90 text-[#6B0F1A] text-xs font-black">
+                          تشاركي
+                        </span>
+                      )}
+                    </div>
 
-                  return (
-                    <div
-                      key={meal.id}
-                      className="p-5 rounded-[28px] bg-white border-2 border-[#E7D7C7] hover:border-[#6B0F1A] transition-all shadow-sm hover:shadow-xl hover:shadow-[#6B0F1A]/10 flex flex-col justify-between space-y-4 group"
-                    >
-                      <div className="space-y-3">
-                        <div className="relative w-full h-48 rounded-2xl overflow-hidden bg-stone-100 border-2 border-[#E7D7C7] shadow-sm">
-                          <Image
-                            src={getMealImageUrl(meal.name_ar, meal.image_url)}
-                            alt={meal.name_ar}
-                            fill
-                            unoptimized
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                          {meal.is_expiring_soon && (
-                            <div className="absolute top-2.5 right-2.5">
-                              <span className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-[#6B0F1A] text-white font-extrabold shadow-md border border-white/20">
-                                <Tag className="w-3 h-3 stroke-[2.5]" />
-                                <span>عرض توفير طازج</span>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <h3 className="font-black text-lg text-[#1E1210] group-hover:text-[#6B0F1A] transition-colors leading-snug">
-                            {meal.name_ar}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1.5 text-xs text-stone-600 font-bold">
-                            <span className="flex items-center gap-1 text-[#6B0F1A] bg-[#FAF0F0] px-2 py-0.5 rounded-lg border border-[#6B0F1A]/20 font-black">
-                              <Flame className="w-3.5 h-3.5 text-[#6B0F1A]" />
-                              <span>{formatKcal(meal.total_kcal)}</span>
-                            </span>
-                            <span>•</span>
-                            <span className="text-[#854D0E] bg-[#FEF9EE] px-2 py-0.5 rounded-lg border border-[#D97706]/30 font-black">
-                              {meal.portion_type === 'shareable' ? 'تشاركي عائلي' : 'وجبة فردية'}
-                            </span>
-                          </div>
-                        </div>
+                    <div className="flex-1 p-3.5 flex flex-col gap-2">
+                      <h3 className="font-black text-lg leading-snug line-clamp-2 min-h-[2.8rem]">{meal.name_ar}</h3>
+                      <div className="flex items-center gap-1.5 text-[11px] font-black tabular-nums flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">كارب {m.estimated ? '~' : ''}{Math.round(m.carbsG)}</span>
+                        <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200">بروتين {m.estimated ? '~' : ''}{Math.round(m.proteinG)}</span>
+                        <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200">دهون {m.estimated ? '~' : ''}{Math.round(m.fatG)}</span>
                       </div>
 
-                      {/* السعر وزر الإضافة */}
-                      <div className="pt-3 border-t-2 border-stone-100 flex items-center justify-between">
-                        <div>
-                          {meal.discount_price ? (
-                            <div>
-                              <div className="text-2xl font-black text-[#6B0F1A]">
-                                {formatEgp(meal.discount_price)}
-                              </div>
-                              <div className="text-xs text-stone-400 line-through">
-                                {formatEgp(meal.price)}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-2xl font-black text-[#6B0F1A]">
-                              {formatEgp(meal.price)}
-                            </div>
-                          )}
+                      <div className="mt-auto pt-2 flex flex-col gap-2.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="text-2xl font-black text-[#6B0F1A] tabular-nums whitespace-nowrap">{formatEgp(price)}</div>
+                          {hasDiscount && <div className="text-sm text-stone-400 line-through tabular-nums whitespace-nowrap">{formatEgp(meal.price)}</div>}
                         </div>
 
                         {qty === 0 ? (
-                          <Button
-                            size="sm"
-                            variant="primary"
+                          <button
+                            type="button"
+                            aria-label="إضافة"
                             onClick={() => addToCart(meal)}
-                            className="gap-1.5 px-5 py-2 text-xs font-black"
+                            className="h-12 w-full rounded-2xl bg-gradient-to-b from-[#8B1422] to-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-[0_4px_0_0_#3E080F] hover:-translate-y-0.5 active:translate-y-1 active:shadow-none transition-all cursor-pointer flex items-center justify-center gap-2 font-black text-lg"
                           >
-                            <Plus className="w-4 h-4 stroke-[3]" />
-                            <span>إضافة للطلب</span>
-                          </Button>
+                            <Plus className="w-6 h-6 stroke-[3]" />
+                            <span aria-hidden="true">إضافة</span>
+                          </button>
                         ) : (
-                          <div className="flex items-center gap-2 bg-[#FAF0F0] p-1.5 rounded-2xl border-2 border-[#6B0F1A]/30">
+                          <div className="flex items-center gap-2 h-12 w-full rounded-2xl bg-[#FAF0F0] border-2 border-[#6B0F1A]/30 p-1">
                             <button
-                              onClick={() => updateCartQuantity(meal.id, qty - 1)}
-                              className="w-8 h-8 rounded-xl bg-white hover:bg-stone-100 text-[#1E1210] font-black flex items-center justify-center border border-stone-300 shadow-xs cursor-pointer"
-                            >
-                              <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </button>
-                            <span className="w-6 text-center font-black text-sm text-[#1E1210]">
-                              {qty}
-                            </span>
-                            <button
+                              type="button"
+                              aria-label="زيادة"
                               onClick={() => addToCart(meal)}
-                              className="w-8 h-8 rounded-xl bg-[#6B0F1A] text-white font-black flex items-center justify-center shadow-xs cursor-pointer"
+                              className="h-full flex-1 min-w-0 rounded-xl bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-[0_3px_0_0_#3E080F] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center justify-center"
                             >
-                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <Plus className="w-6 h-6 stroke-[3]" />
+                            </button>
+                            <span key={qty} className="anim-pop min-w-8 text-center font-black text-2xl tabular-nums">{qty}</span>
+                            <button
+                              type="button"
+                              aria-label="تقليل"
+                              onClick={() => updateCartQuantity(meal.id, qty - 1)}
+                              className="h-full flex-1 min-w-0 rounded-xl bg-white border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center justify-center"
+                            >
+                              <Minus className="w-6 h-6 stroke-[3]" />
                             </button>
                           </div>
                         )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* السلة */}
+        <aside className={`${glass} anim-fade-up lg:min-h-0 p-4 flex flex-col gap-3`} style={{ animationDelay: '120ms' }}>
+          <div className="flex items-center gap-3">
+            <span className="relative w-12 h-12 rounded-2xl bg-[#FAF0F0] text-[#6B0F1A] flex items-center justify-center shrink-0">
+              <ShoppingBag className="w-6 h-6" />
+              {totalCartCount > 0 && (
+                <span key={totalCartCount} className="anim-pop absolute -top-1.5 -left-1.5 min-w-6 h-6 px-1 rounded-full bg-[#E5A91E] text-[#3E080F] text-xs font-black flex items-center justify-center tabular-nums">
+                  {totalCartCount}
+                </span>
+              )}
+            </span>
+            <h2 className="flex-1 text-xl font-black">طلبك</h2>
+            {cart.length > 0 && (
+              <button
+                type="button"
+                aria-label="تفريغ"
+                onClick={clearCart}
+                className="w-10 h-10 rounded-xl text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer flex items-center justify-center"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
             )}
           </div>
 
-          {/* سلة الشراء الجانبية */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24 p-6 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b-2 border-stone-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-[#FAF0F0] text-[#6B0F1A]">
-                    <ShoppingBag className="w-5 h-5 stroke-[2.25]" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-base text-[#1E1210]">سلة طلباتك</h3>
-                    <p className="text-xs text-[#854D0E] font-bold">{totalCartCount} وجبات مختارة</p>
-                  </div>
-                </div>
-
-                {cart.length > 0 && (
-                  <button
-                    onClick={clearCart}
-                    className="text-xs text-[#6B0F1A] hover:underline transition-colors flex items-center gap-1 font-bold cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>تفريغ</span>
-                  </button>
-                )}
+          <div className="flex-1 min-h-[8rem] lg:min-h-0 overflow-y-auto -mx-1 px-1 space-y-2">
+            {cart.length === 0 ? (
+              <div className="h-full min-h-[8rem] flex flex-col items-center justify-center gap-2 text-stone-300">
+                <ShoppingBag className="w-14 h-14 stroke-1" />
+                <span className="font-black text-stone-500">فاضي</span>
               </div>
-
-              {/* عناصر السلة */}
-              {cart.length === 0 ? (
-                <div className="py-12 text-center space-y-2 text-stone-400">
-                  <ShoppingBag className="w-12 h-12 mx-auto stroke-1 text-stone-300" />
-                  <p className="text-sm font-bold text-stone-600">السلة فارغة حالياً</p>
-                  <p className="text-xs">اضغط على "إضافة للطلب" عند أي وجبة لتظهر هنا</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                  {cart.map((item) => {
-                    const price = item.meal.discount_price ?? item.meal.price;
-                    return (
-                      <div
-                        key={item.meal.id}
-                        className="p-3.5 rounded-2xl bg-[#FAF0F0] border border-[#6B0F1A]/20 flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <div className="font-black text-[#1E1210] text-sm">
-                            {item.meal.name_ar}
-                          </div>
-                          <div className="text-stone-500 mt-0.5 font-bold">
-                            {formatEgp(price)} للواحدة • {formatKcal(item.meal.total_kcal * item.quantity)}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() =>
-                              updateCartQuantity(item.meal.id, item.quantity - 1)
-                            }
-                            className="w-7 h-7 rounded-lg bg-white border border-stone-300 text-stone-800 flex items-center justify-center font-black shadow-xs cursor-pointer"
-                          >
-                            <Minus className="w-3 h-3 stroke-[2.5]" />
-                          </button>
-                          <span className="w-6 text-center font-black text-[#1E1210]">
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() => addToCart(item.meal)}
-                            className="w-7 h-7 rounded-lg bg-[#6B0F1A] text-white flex items-center justify-center font-black shadow-xs cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3 stroke-[2.5]" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ملخص السلة */}
-              {cart.length > 0 && (
-                <div className="space-y-4 pt-4 border-t-2 border-stone-100">
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between text-stone-600 font-bold">
-                      <span>إجمالي السعرات الحرارية:</span>
-                      <span className="text-emerald-800 font-black">{formatKcal(totalKcal)}</span>
+            ) : (
+              cart.map((item) => {
+                const price = item.meal.discount_price ?? item.meal.price;
+                return (
+                  <div key={item.meal.id} className="anim-fade-up flex items-center gap-2.5 rounded-2xl bg-[#F8F4EE] border-2 border-[#E7D7C7] p-2">
+                    <span className="relative w-12 h-12 rounded-xl overflow-hidden bg-stone-200 shrink-0">
+                      <Image src={getMealImageUrl(item.meal.name_ar, item.meal.image_url)} alt="" fill unoptimized className="object-cover" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-black text-sm leading-snug line-clamp-1">{item.meal.name_ar}</div>
+                      <div className="text-xs font-black text-[#6B0F1A] tabular-nums">{formatEgp(price * item.quantity)}</div>
                     </div>
-                    <div className="flex justify-between text-base font-black text-[#1E1210]">
-                      <span>إجمالي الحساب:</span>
-                      <span className="text-2xl text-[#6B0F1A]">{formatEgp(totalPrice)}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="تقليل"
+                        onClick={() => updateCartQuantity(item.meal.id, item.quantity - 1)}
+                        className="w-8 h-8 rounded-lg bg-white border-2 border-[#D6C7B2] cursor-pointer flex items-center justify-center"
+                      >
+                        <Minus className="w-4 h-4 stroke-[3]" />
+                      </button>
+                      <span key={item.quantity} className="anim-pop w-6 text-center font-black tabular-nums">{item.quantity}</span>
+                      <button
+                        type="button"
+                        aria-label="زيادة"
+                        onClick={() => addToCart(item.meal)}
+                        className="w-8 h-8 rounded-lg bg-[#6B0F1A] text-white cursor-pointer flex items-center justify-center"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                      </button>
                     </div>
                   </div>
-
-                  <Button
-                    size="xl"
-                    variant="primary"
-                    onClick={handleCheckout}
-                    disabled={ordering}
-                    className="w-full gap-2 py-4 text-base font-black"
-                  >
-                    <Printer className="w-5 h-5 stroke-[2.25]" />
-                    <span>{ordering ? 'جاري تجهيز البون...' : 'تأكيد الطلب وطباعة البون'}</span>
-                  </Button>
-                </div>
-              )}
-            </div>
+                );
+              })
+            )}
           </div>
-        </div>
+
+          {cart.length > 0 && (
+            <div className="space-y-2.5 pt-3 border-t-2 border-[#EADBCB]">
+              <div className="flex items-center justify-between text-sm font-black text-stone-600">
+                <span>السعرات</span>
+                <span className="tabular-nums text-emerald-800">{formatKcal(totalKcal)}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-black tabular-nums">
+                <span className="rounded-lg py-1 bg-amber-50 text-amber-800 border border-amber-200">كارب {cartMacros.estimated ? '~' : ''}{Math.round(cartMacros.carbsG)}</span>
+                <span className="rounded-lg py-1 bg-rose-50 text-rose-800 border border-rose-200">بروتين {cartMacros.estimated ? '~' : ''}{Math.round(cartMacros.proteinG)}</span>
+                <span className="rounded-lg py-1 bg-sky-50 text-sky-800 border border-sky-200">دهون {cartMacros.estimated ? '~' : ''}{Math.round(cartMacros.fatG)}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="font-black">الإجمالي</span>
+                <span className="text-3xl font-black text-[#6B0F1A] tabular-nums">{formatEgp(priceShown)}</span>
+              </div>
+            </div>
+          )}
+
+          <Button
+            size="xl"
+            variant="primary"
+            onClick={handleCheckout}
+            disabled={cart.length === 0 || ordering}
+            className="w-full gap-2.5 py-4 text-lg font-black"
+          >
+            <Printer className="w-6 h-6 stroke-[2.25]" />
+            <span>{ordering ? '...' : 'تأكيد الطلب'}</span>
+          </Button>
+        </aside>
       </main>
     </div>
   );

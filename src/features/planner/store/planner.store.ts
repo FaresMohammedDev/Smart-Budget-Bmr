@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { PersonInput, MealTime } from '../../nutrition/domain/types';
 import { Meal, RecommendationOption, PersonShareDetail } from '../../recommendations/domain/types';
+import { getDataMode } from '@/lib/data/config';
 import { getDefaultMealTime } from '../../nutrition/domain/meal-fraction';
 
 export interface CartItem {
@@ -39,6 +40,7 @@ interface PlannerState {
   removeFromCart: (mealId: string) => void;
   updateCartQuantity: (mealId: string, quantity: number) => void;
   clearCart: () => void;
+  syncCartMeals: (meals: Meal[]) => void;
   getCartTotal: () => { totalPrice: number; totalKcal: number };
   // معرف المجموعة المحفوظة المختارة
   savedGroupId: string | null;
@@ -49,7 +51,7 @@ interface PlannerState {
 }
 
 const initialPerson: PersonInput = {
-  name: 'شخص 1',
+  name: 'فرد 1',
   age: 30,
   gender: 'male',
   heightCm: 175,
@@ -65,13 +67,14 @@ export const usePlannerStore = create<PlannerState>()(
 
       peopleCount: 1,
       setPeopleCount: (peopleCount) => {
+        peopleCount = Math.max(1, Math.min(30, Math.round(peopleCount)));
         const currentPeople = get().people;
         const newPeople: PersonInput[] = [];
         for (let i = 0; i < peopleCount; i++) {
           newPeople.push(
             currentPeople[i] ?? {
               ...initialPerson,
-              name: `شخص ${i + 1}`,
+              name: `فرد ${i + 1}`,
             }
           );
         }
@@ -103,10 +106,10 @@ export const usePlannerStore = create<PlannerState>()(
 
       cart: [],
       addToCart: (meal) => {
-        const currentCart = [...get().cart];
+        const currentCart = get().cart.map(item => ({ ...item }));
         const existing = currentCart.find((i) => i.meal.id === meal.id);
         if (existing) {
-          existing.quantity += 1;
+          existing.quantity = Math.min(100, existing.quantity + 1);
         } else {
           currentCart.push({ meal, quantity: 1 });
         }
@@ -119,15 +122,16 @@ export const usePlannerStore = create<PlannerState>()(
         if (quantity <= 0) {
           get().removeFromCart(mealId);
         } else {
-          const currentCart = [...get().cart];
+          const currentCart = get().cart.map(item => ({ ...item }));
           const item = currentCart.find((i) => i.meal.id === mealId);
           if (item) {
-            item.quantity = quantity;
+            item.quantity = Math.max(1, Math.min(100, Math.floor(quantity)));
             set({ cart: currentCart });
           }
         }
       },
       clearCart: () => set({ cart: [] }),
+      syncCartMeals: (meals) => set({ cart: get().cart.map(item => ({ ...item, meal: meals.find(m => m.id === item.meal.id) ?? item.meal })) }),
       getCartTotal: () => {
         const cart = get().cart;
         const totalPrice = cart.reduce((sum, item) => {
@@ -158,7 +162,7 @@ export const usePlannerStore = create<PlannerState>()(
         }),
     }),
     {
-      name: 'smart-budget-kiosk-storage',
+      name: `smart-budget-kiosk-storage-${getDataMode()}-v2`,
       storage: createJSONStorage(() => sessionStorage),
     }
   )

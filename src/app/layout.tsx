@@ -11,11 +11,8 @@ const ibmPlexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: 'Smart Budget | فتح الله ماركت',
-  description: 'النظام الذكي لاقتراح الوجبات حسب السعرات والميزانية - فتح الله ماركت',
-  icons: {
-    icon: '/images/fathalla-logo.png',
-  },
+  title: 'Smart Budget',
+  description: 'وجبات على قد سعراتك وميزانيتك',
 };
 
 export default function RootLayout({

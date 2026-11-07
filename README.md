@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Smart Budget — Fathalla capstone prototype
 
-## Getting Started
+كيوسك عربي لوجبات فتح الله: طلب مباشر، أو ترشيح وجبات حسب ميزانية المجموعة واحتياجها التقديري من السعرات. أزرار الدخول المباشر إلى الإدارة والكاشير مقصودة لعرض لجنة التقييم.
 
-First, run the development server:
+## التشغيل
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
+```powershell
+pnpm install --frozen-lockfile
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+افتح `http://localhost:3000`. لا يلزم ملف env لتجربة المنيو، الإدارة، الطلبات، البونات، الكاشير والمجموعات المحلية.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## مصدر البيانات
 
-## Learn More
+- `NEXT_PUBLIC_DATA_MODE=auto` (الافتراضي): يستخدم قاعدة العرض المحلية عند غياب إعدادات Supabase، وينتقل إلى Supabase عند اكتمال الرابط والمفتاح العام.
+- `local`: يجبر التطبيق على استخدام بيانات العرض حتى مع وجود إعدادات Supabase.
+- `supabase`: يشترط اكتمال الإعدادات. فشل الاتصال يعرض خطأ حقيقيًا؛ لا ينشئ طلبات محلية بديلة.
 
-To learn more about Next.js, take a look at the following resources:
+انسخ `.env.example` إلى `.env.local` عند وصول إعدادات الفريق. استخدم الرابط والمفتاح العام/publishable فقط. أعد تشغيل dev، أو أعد البناء في الإنتاج بعد تغيير متغيرات `NEXT_PUBLIC_*`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+الوضع المحلي قاعدة واحدة محفوظة في `localStorage` تحت `fathalla-demo-db-v1`، مشتركة بين تبويبات نفس المتصفح ونفس العنوان/المنفذ. يبدأ المنيو من بيانات العرض مرة واحدة، وبعدها تظهر تعديلات الأدمن كما حُفظت، بما فيها الصور والتوافر. الطلبات تحفظ لقطات مستقلة من السعر والسعرات والمكونات المتاحة وقت الإنشاء. Web Locks تسلسل عمليات التبويبات عندما يدعمها المتصفح.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+البيانات المحلية لا تنتقل إلى جهاز آخر، ولا تتزامن مع Supabase. الصور المرفوعة محليًا تستهلك مساحة المتصفح؛ حد الصورة 2MB، وأخطاء المساحة تظهر للمستخدم. لمسح قاعدة العرض عمدًا استخدم أدوات المطور لحذف المفتاح المذكور. تصفير الكيوسك يمسح الطلب الجاري فقط ويحتفظ بسجل الطلبات والمنيو. المجموعات المحلية مشتركة لغرض العرض، أما حسابات البريد فتحتاج Supabase.
 
-## Deploy on Vercel
+## الربط بقاعدة الفريق
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+اقرأ [دليل التشغيل](SETUP_AND_DEPLOY.md). طبّق `supabase/20261107_prototype_consistency.sql` على **قاعدة الفريق الموجودة** بعد مراجعتها؛ هذا تحديث للجداول الحالية وليس إنشاء قاعدة من الصفر. ملفات `SUPABASE_ALL_FIXES.sql` و`fix_*.sql` و`supabase_migration_update.sql` ملفات تاريخية: لا تعِد تشغيلها بعد التحديث الجديد لأنها تستبدل الدوال بإصدارات أقدم.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+التحديث الجديد يحافظ على صلاحيات البروتوتايب والدخول السريع. يضيف منع تكرار الطلب، والتحقق من التوافر والكمية والسعر والميزانية، وحساب الحصص من لقطة الأصناف، ودفعًا لا يغيّر توقيت الدفع عند تكرار الضغط، وحفظ مجموعة وأفرادها في معاملة واحدة. لا يزرع أصنافًا أو ينسخ بيانات المتصفح أو يغيّر بيانات الفريق الحالية.
+
+## تنظيم الكود
+
+- `src/app`: شاشات البداية، الأفراد، الميزانية، الترشيحات، المنيو، البون، الكاشير والإدارة.
+- `src/lib/data/config.ts`: اختيار مصدر البيانات.
+- `src/lib/data/repository.ts`: العمليات المشتركة للمصدر المحلي وSupabase؛ الصفحات لا تصنع نتائج نجاح بديلة.
+- `src/lib/data/order.ts`: التحقق من الطلب، الحسابات، ولقطة البون المحلية.
+- `src/features/nutrition/domain`: حساب BMR وTDEE ونسبة الوجبة.
+- `src/features/recommendations/domain`: الترشيح وتوزيع الحصص. الوحدات الفردية تظل صحيحة؛ الصواني تتوزع بالنسب.
+- `src/features/planner/store`: حالة الطلب الجاري، مع فصل التخزين حسب مصدر البيانات.
+- `src/test/order-flow.test.tsx`: اختبارات مسار الشاشات من السلة للبون وفشل الدفع.
+
+## خطة هذه المرحلة وحالتها
+
+- [x] إبقاء اختصارات عرض الأدمن والكاشير.
+- [x] مصدر واحد للمنيو والإدارة والطلبات، محلي مؤقت أو Supabase.
+- [x] إزالة البونات الوهمية والنجاح المحلي بعد فشل الاتصال.
+- [x] توحيد نسبة الوجبة وتنسيق تفاصيل الحصص ولقطة البون.
+- [x] تحسين حالة الميزانية القليلة وعدم تجاوز فلتر توقيت الوجبة.
+- [x] عدم تقديم مشروبات/جوانب وحدها كوجبة رئيسية، وتقليل تكرار الترشيحات.
+- [x] البحث عن الطلبات القديمة وإحصائيات مبيعات الطلبات المدفوعة فقط.
+- [x] اختبارات الحسابات ومستودع البيانات ومسارات الشاشات.
+- [ ] تطبيق SQL والتحقق على قاعدة الفريق الحية عند توفر env.
+- [ ] تجربة الطابعة الفعلية وقارئ QR أمام الجهاز.
+- [ ] دراسة الهوية الجديدة وبناء design system وإعادة تصميم الواجهات في المرحلة التالية.
+
+## حدود النسخة الحالية
+
+الطباعة عبر حوار المتصفح باستخدام `react-to-print` وتنسيق ورق 80mm، وليست تكامل ESC/POS مباشرًا. البون يحتوي QR بمعرّف الطلب؛ لا يحتوي Code128 أو توقيع HMAC. لا توجد شاشة KDS مستقلة. المنيو المحلي وصوره وقيمه الغذائية بيانات عرض وليست قياسات معتمدة من المطعم.
+
+المواصفات والتدقيق البصري القديمان يحتويان تصورات مستقبلية وادعاءات نتائج؛ لا تعتبرهما تقرير اختبار للنسخة الحالية. ملف المواصفات الجديد يوجه نحو شاشة أفقية وهوية نبيتي/خردلي، بينما دليل التصميم الأقدم يستخدم اتجاهًا مختلفًا. حسم الهوية ضمن مرحلة التصميم القادمة.

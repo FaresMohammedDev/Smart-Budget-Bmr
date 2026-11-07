@@ -19,7 +19,7 @@ export function calculateBmr(
   heightCm: number,
   ageYears: number
 ): number {
-  if (weightKg <= 0 || heightCm <= 0 || ageYears <= 0) {
+  if (![weightKg, heightCm, ageYears].every(Number.isFinite) || weightKg <= 0 || heightCm <= 0 || ageYears <= 0 || !['male', 'female'].includes(gender)) {
     throw new Error('الوزن والطول والعمر يجب أن تكون قيماً موجبة');
   }
 

@@ -1,40 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import {
-  Sparkles,
-  ArrowRight,
-  Printer,
-  AlertCircle,
-  Check,
-  Flame,
-  Users,
-  Utensils,
-  UtensilsCrossed,
-  Share2,
-} from 'lucide-react';
+import { ArrowRight, Printer, AlertCircle, Check, Users } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
+import { StepBar } from '@/components/layout/StepBar';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { useCountUp } from '@/components/people/KcalRing';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
 import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
 import { calculateTargetMealKcal } from '@/features/nutrition/domain/meal-fraction';
+import { calculateMacroTargets, sumMealMacros } from '@/features/nutrition/domain/macros';
 import { formatEgp, formatKcal } from '@/lib/format';
 import { getMealImageUrl } from '@/lib/meal-images';
-import {
-  EngineResult,
-  Meal,
-  RecommendationOption,
-  PersonShareDetail,
-} from '@/features/recommendations/domain/types';
+import { EngineResult, RecommendationOption, PersonShareDetail } from '@/features/recommendations/domain/types';
 import { PersonNutrition } from '@/features/nutrition/domain/types';
 import { recommendMeals } from '@/features/recommendations/domain/engine';
 import { calculateGroupShares } from '@/features/recommendations/domain/shares';
-import { createClient } from '@/lib/supabase/client';
-import { RICH_FATHALLA_MEALS } from '@/lib/meals-data';
+
+import { listMeals, createOrder, errorMessage } from '@/lib/data/repository';
 
 export default function PlanResultsPage() {
   const router = useRouter();
@@ -53,9 +39,11 @@ export default function PlanResultsPage() {
   const [currentShares, setCurrentShares] = useState<PersonShareDetail[]>([]);
   const [ordering, setOrdering] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const busy = useRef(false);
+  const requestRef = useRef<{key: string; id: string} | null>(null);
 
   // 1. حساب السعرات التقديرية للأفراد
-  const peopleNutrition: PersonNutrition[] = people.map((p, idx) => {
+  const peopleNutrition: PersonNutrition[] = useMemo(() => people.map((p, idx) => {
     try {
       const bmr = calculateBmr(p.gender, p.weightKg, p.heightCm, p.age);
       const tdee = calculateTdee(bmr, p.activityLevel);
@@ -71,13 +59,13 @@ export default function PlanResultsPage() {
       return {
         id: `p-${idx}`,
         name: p.name || `فرد ${idx + 1}`,
-        bmr: 1700,
-        tdee: 2500,
+        bmr: 0,
+        tdee: 0,
         targetKcal: 0,
         sharePercent: 0,
       };
     }
-  });
+  }), [people]);
 
   const totalGroupTdee = peopleNutrition.reduce((sum, p) => sum + p.tdee, 0);
   const targetKcal = calculateTargetMealKcal(totalGroupTdee, mealTime);
@@ -93,36 +81,16 @@ export default function PlanResultsPage() {
     }
   };
 
-  // 2. استدعاء المنيو الفعلي من Supabase ودمجه مع قائمة الوجبات الغنية الكاملة لفتح الله
+  // قراءة الأصناف المتاحة من نفس المصدر المستخدم في الإدارة وإنشاء الطلب.
   useEffect(() => {
     async function fetchAndRecommend() {
       setLoading(true);
       try {
-        const supabase = createClient();
-        const { data: dbMeals } = await supabase
-          .from('meals')
-          .select('*')
-          .eq('is_available', true);
+        const mealsPool = await listMeals(true);
+        setSelectedOpt(null);
+        setCurrentShares([]);
+        setErrorMsg('');
 
-        // خريطة وجبات قاعدة البيانات لربط الـ UUID للأوردرات
-        const dbMap = new Map((dbMeals || []).map((m: any) => [m.name_ar, m]));
-
-        // دمج وجبات قاعدة البيانات مع القائمة الغنية الكاملة (30+ وجبة تشمل فطور مصري، مشويات، صواني، سناكس)
-        const mealsPool: Meal[] = RICH_FATHALLA_MEALS.map((richMeal) => {
-          const dbMatch = dbMap.get(richMeal.name_ar);
-          if (dbMatch) {
-            return {
-              ...richMeal,
-              id: dbMatch.id, // استخدام UUID من قاعدة البيانات
-              price: Number(dbMatch.price),
-              discount_price: dbMatch.discount_price ? Number(dbMatch.discount_price) : null,
-              is_expiring_soon: Boolean(dbMatch.is_expiring_soon),
-            };
-          }
-          return richMeal;
-        });
-
-        // تشغيل المحرك الذكي مع مراعاة وقت الوجبة (mealTime) لمنع التناقضات
         const res = recommendMeals({
           availableMeals: mealsPool,
           targetKcal,
@@ -144,333 +112,292 @@ export default function PlanResultsPage() {
           }
         }
       } catch (err: unknown) {
-        setErrorMsg('حدث خطأ أثناء تحميل الوجبات.');
+        setSelectedOpt(null);
+        setErrorMsg(errorMessage(err));
       } finally {
         setLoading(false);
       }
     }
 
     fetchAndRecommend();
-  }, [budget, targetKcal, mealTime]);
+  }, [budget, targetKcal, mealTime, peopleNutrition, setSelectedRecommendation, setSelectedShares]);
 
   // تأكيد الطلب وإنشاء البون
   const handleConfirmOrder = async () => {
-    if (!selectedOpt) return;
+    if (!selectedOpt || busy.current) return;
+    busy.current = true;
     setOrdering(true);
     setErrorMsg('');
-
     try {
-      const supabase = createClient();
-
-      const itemsPayload = selectedOpt.items.map((i) => ({
-        meal_id: i.meal.id,
-        quantity: i.quantity,
-      }));
-
-      const peoplePayload = people.map((p, idx) => ({
-        name: p.name || `فرد ${idx + 1}`,
-        age: p.age,
-        gender: p.gender,
-        height_cm: p.heightCm,
-        weight_kg: p.weightKg,
-        activity_level: p.activityLevel,
-        share_percent: currentShares[idx]?.sharePercent ?? Math.round(100 / people.length),
-        share_kcal: currentShares[idx]?.shareKcal ?? 0,
-        share_details: currentShares[idx]?.allocatedItems ?? [],
-      }));
-
-      const { data: orderId, error: rpcError } = await supabase.rpc('create_order', {
-        p_payload: {
-          budget,
-          group_id: savedGroupId || undefined,
-          meal_fraction: 0.4,
-          order_mode: 'smart_budget',
-          items: itemsPayload,
-          people: peoplePayload,
-        },
-      });
-
-      if (rpcError) {
-        throw new Error(rpcError.message);
-      }
-
-      setSelectedRecommendation(selectedOpt);
-      setSelectedShares(currentShares);
-      router.push(`/receipt/${orderId}`);
-    } catch (err: unknown) {
-      const fallbackOrderId = `ord-${Date.now()}`;
-      setSelectedRecommendation(selectedOpt);
-      setSelectedShares(currentShares);
-      router.push(`/receipt/${fallbackOrderId}`);
+      const payload = { mode: 'smart_budget' as const, expectedTotal: selectedOpt.totalPrice, budget, mealTime, people, groupId: savedGroupId,
+        items: selectedOpt.items.map(i => ({ meal_id: i.meal.id, quantity: i.quantity })) };
+      const key = JSON.stringify(payload);
+      if (requestRef.current?.key !== key) requestRef.current = { key, id: crypto.randomUUID() };
+      const id = await createOrder({ ...payload, requestId: requestRef.current.id });
+      router.push(`/receipt/${id}`);
+    } catch (error) {
+      setErrorMsg(errorMessage(error));
     } finally {
+      busy.current = false;
       setOrdering(false);
     }
   };
 
+  const kcalShown = useCountUp(selectedOpt?.totalKcal ?? 0);
+  const priceShown = useCountUp(selectedOpt?.totalPrice ?? 0, 450);
+  const macros = calculateMacroTargets(targetKcal);
+  const comboMacros = selectedOpt ? sumMealMacros(selectedOpt.items) : null;
+  const success = engineResult?.status === 'success' ? engineResult : null;
+
+  const kcalPct = selectedOpt && targetKcal > 0 ? selectedOpt.totalKcal / targetKcal : 0;
+  const pricePct = selectedOpt && budget > 0 ? selectedOpt.totalPrice / budget : 0;
+  const kcalOk = kcalPct >= 0.85 && kcalPct <= 1.15;
+  const priceOk = pricePct <= 1;
+
+  const shell =
+    'anim-fade-up rounded-[2rem] bg-white/90 backdrop-blur border-2 border-[#E7D7C7] shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)]';
+
   return (
-    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
+    <div className="relative min-h-screen overflow-x-clip bg-[#F8F4EE] text-[#1E1210] flex flex-col select-none">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="anim-blob absolute -top-32 -right-24 w-[30rem] h-[30rem] rounded-full bg-[#6B0F1A]/12 blur-3xl" />
+        <div className="anim-blob-slow absolute -bottom-40 -left-28 w-[34rem] h-[34rem] rounded-full bg-[#E5A91E]/20 blur-3xl" />
+      </div>
+
       <KioskHeader />
 
-      <main className="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-8 space-y-6">
-        {/* شريط المراحل */}
-        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b-2 border-[#E7D7C7] pb-4">
-          <div className="flex items-center gap-2 text-stone-500">
-            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs border border-emerald-300">
-              <Check className="w-4 h-4 stroke-[2.5]" />
-            </span>
-            <span className="font-extrabold">بيانات الأفراد</span>
+      <main className="relative z-10 flex-1 w-full max-w-[92rem] mx-auto px-5 sm:px-8 py-4 sm:py-5 flex flex-col gap-4">
+        <div className="anim-fade-up flex items-center gap-4 flex-wrap">
+          <div className="flex-1 min-w-[18rem]">
+            <StepBar current={3} />
           </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-emerald-200" />
-          <div className="flex items-center gap-2 text-stone-500">
-            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs border border-emerald-300">
-              <Check className="w-4 h-4 stroke-[2.5]" />
-            </span>
-            <span className="font-extrabold">الميزانية والوقت</span>
-          </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-300" />
-          <div className="flex items-center gap-2 text-[#6B0F1A]">
-            <span className="w-7 h-7 rounded-full bg-[#6B0F1A] text-white flex items-center justify-center font-black text-xs border border-[#3E080F] shadow-xs">
-              3
-            </span>
-            <span className="font-black">ترشيح الوجبات</span>
+          <div className="flex items-center gap-2 text-sm font-black">
+            <span className="px-4 py-1.5 rounded-full bg-white border-2 border-[#6B0F1A]/25 text-[#6B0F1A] tabular-nums">{formatEgp(budget)}</span>
+            <span className="px-4 py-1.5 rounded-full bg-white border-2 border-[#D97706]/35 text-[#854D0E] tabular-nums">{formatKcal(targetKcal)}</span>
           </div>
         </div>
 
+        {errorMsg && (
+          <p role="alert" className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-center font-bold">
+            {errorMsg}
+          </p>
+        )}
+
         {loading ? (
-          <div className="p-16 text-center space-y-4">
-            <div className="w-14 h-14 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-stone-600 font-black text-lg">جاري حساب أفضل التوليفات الطازجة من منيو فتح الله...</p>
+          <div className={`${shell} flex-1 flex items-center justify-center min-h-[18rem]`}>
+            <div className="relative w-20 h-20">
+              <span className="anim-ring absolute inset-0 rounded-full border-4 border-[#6B0F1A]/40" />
+              <span className="absolute inset-0 rounded-full border-4 border-[#6B0F1A] border-t-transparent animate-spin" />
+            </div>
           </div>
         ) : engineResult?.status === 'low_budget' ? (
-          /* حالة الميزانية القليلة */
-          <div className="p-8 rounded-3xl bg-white border-2 border-amber-300 shadow-sm space-y-6 text-right">
-            <div className="flex items-start gap-4">
-              <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-700">
-                <AlertCircle className="w-8 h-8" />
-              </div>
+          <div className={`${shell} flex-1 p-6 sm:p-8 flex flex-col gap-5`}>
+            <div className="flex items-center gap-4">
+              <span className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-9 h-9" />
+              </span>
               <div>
-                <h3 className="text-2xl font-black text-stone-900">توضيح بخصوص الميزانية</h3>
-                <p className="text-sm text-stone-600 mt-2 leading-relaxed font-medium">
-                  {engineResult.apologyMessageAr}
-                </p>
+                <h2 className="text-3xl font-black">الميزانية قليلة</h2>
+                <p className="text-lg font-bold text-stone-600 mt-1">{engineResult.apologyMessageAr}</p>
               </div>
             </div>
-
             {engineResult.suggestedSides.length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-stone-100">
-                <h4 className="font-bold text-base text-orange-600">
-                  اقتراحات إضافات وسناكس تكفي ميزانيتك الحالية ({formatEgp(engineResult.budget)}):
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {engineResult.suggestedSides.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-bold text-stone-900">{item.meal.name_ar}</div>
-                        <div className="text-xs text-stone-500">
-                          {formatKcal(item.meal.total_kcal)}
-                        </div>
-                      </div>
-                      <div className="text-red-600 font-black">
-                        {formatEgp(item.meal.discount_price ?? item.meal.price)}
-                      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {engineResult.suggestedSides.map((item, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl bg-[#FEF9EE] border-2 border-[#D97706]/30 flex items-center gap-3">
+                    <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0">
+                      <Image src={getMealImageUrl(item.meal.name_ar, item.meal.image_url)} alt="" fill unoptimized className="object-cover" />
                     </div>
-                  ))}
-                </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-black truncate">{item.meal.name_ar}</div>
+                      <div className="text-sm text-stone-500 font-bold">{formatKcal(item.meal.total_kcal)}</div>
+                    </div>
+                    <div className="font-black text-[#6B0F1A] tabular-nums">{formatEgp(item.meal.discount_price ?? item.meal.price)}</div>
+                  </div>
+                ))}
               </div>
             )}
-
-            <div className="flex justify-between items-center pt-4">
-              <Button
-                variant="outline"
-                onClick={() => router.push('/plan/budget')}
-              >
-                تعديل الميزانية
+            <div className="flex-1" />
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="lg" onClick={() => router.push('/plan/budget')} className="font-black">
+                <ArrowRight className="w-5 h-5 ml-1.5" />
+                <span>تعديل الميزانية</span>
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => router.push('/menu')}
-              >
-                تصفح المنيو المباشر
+              <Button variant="secondary" size="lg" onClick={() => router.push('/menu')} className="font-black">
+                المنيو
               </Button>
             </div>
           </div>
+        ) : !success ? (
+          <div className={`${shell} flex-1 p-8 flex flex-col items-center justify-center gap-4 text-center`}>
+            <AlertCircle className="w-12 h-12 text-amber-600" />
+            <p role="status" className="text-2xl font-black">
+              {engineResult?.status === 'unavailable' ? engineResult.message : 'تعذر التحميل'}
+            </p>
+            <Button size="lg" onClick={() => router.push('/plan/budget')} className="font-black">
+              تعديل الميزانية
+            </Button>
+          </div>
         ) : (
-          /* حالة النجاح وعرض الترشيحات */
-          <div className="space-y-8">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-stone-900 flex items-center gap-2">
-                  <UtensilsCrossed className="w-6 h-6 text-red-600 stroke-[2.25]" />
-                  <span>أفضل توليفات الوجبات المقترحة لكم</span>
-                </h2>
-                <p className="text-xs sm:text-sm text-stone-600 mt-1 font-medium">
-                  مضبوطة بدقة لتناسب ميزانيتكم ({formatEgp(budget)}) وتشبعكم تماماً ({formatKcal(targetKcal)})
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full bg-[#FAF0F0] text-[#6B0F1A] border-2 border-[#6B0F1A]/20 font-black shadow-xs">
-                  {mealTime === 'breakfast'
-                    ? '🍳 مقترحات فطور مصري طازج'
-                    : mealTime === 'lunch'
-                    ? '🍗 مقترحات غداء رئيسية ومشبعة'
-                    : mealTime === 'dinner'
-                    ? '🌙 مقترحات عشاء شهية'
-                    : '☕ سناك وتصبيرة خفيفة'}
-                </span>
-
-                <div className="flex items-center gap-2 bg-[#FEF9EE] px-4 py-1.5 rounded-full border-2 border-[#D97706]/30 text-xs shadow-xs">
-                  <Sparkles className="w-4 h-4 text-[#D97706]" />
-                  <span className="font-black text-[#854D0E]">
-                    {engineResult?.status === 'success' ? engineResult.recommendations.length : 0} توليفات مشبعة
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* قائمة كروت الترشيحات */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {engineResult?.status === 'success' &&
-                engineResult.recommendations.map((rec) => {
-                  const isSelected = selectedOpt?.id === rec.id;
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[19rem_1fr] gap-5 min-h-0">
+            {/* قائمة الاقتراحات */}
+            <section className={`${shell} p-4 flex flex-col gap-3`} style={{ animationDelay: '80ms' }}>
+              <h2 className="text-lg font-black text-stone-600 px-1">{success.recommendations.length} اقتراحات</h2>
+              <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-1 space-y-3 max-h-[26rem] lg:max-h-none">
+                {success.recommendations.map((rec, idx) => {
+                  const on = selectedOpt?.id === rec.id;
+                  const shown = rec.items.slice(0, 4);
                   return (
-                    <div
+                    <button
                       key={rec.id}
+                      type="button"
                       onClick={() => handleSelectMeal(rec)}
-                      className={`relative p-6 rounded-[28px] border-2 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 shadow-sm ${
-                        isSelected
-                          ? 'bg-[#FAF0F0] border-3 border-[#6B0F1A] shadow-xl shadow-[#6B0F1A]/15 scale-[1.02]'
-                          : 'bg-white border-2 border-[#E7D7C7] hover:border-[#6B0F1A] hover:shadow-lg'
+                      className={`anim-fade-up w-full text-right rounded-3xl border-2 p-3.5 flex flex-col gap-2.5 transition-all duration-300 cursor-pointer ${
+                        on
+                          ? 'bg-gradient-to-b from-[#8B1422] to-[#6B0F1A] text-white border-[#3E080F] shadow-[0_6px_0_0_#3E080F] -translate-y-0.5'
+                          : 'bg-white border-[#D6C7B2] shadow-[0_4px_0_0_#C4B29A] hover:border-[#6B0F1A]/60'
                       }`}
+                      style={{ animationDelay: `${140 + idx * 70}ms` }}
                     >
-                      {/* شارة التميز */}
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant={rec.isExpiringSoonOffer ? 'special' : 'default'}
-                        >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-sm font-black px-3 py-1 rounded-full ${on ? 'bg-white/20' : 'bg-[#FAF0F0] text-[#6B0F1A]'} ${rec.isExpiringSoonOffer ? 'ring-2 ring-[#E5A91E]' : ''}`}>
                           {rec.title_ar}
-                        </Badge>
-                        <div
-                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? 'bg-[#6B0F1A] border-[#3E080F] text-white shadow-xs'
-                              : 'border-stone-300 bg-white'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
-                        </div>
+                        </span>
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 ${on ? 'bg-[#E5A91E] border-[#E5A91E] text-[#3E080F]' : 'border-stone-300'}`}>
+                          {on && <Check className="w-4 h-4 stroke-[3]" />}
+                        </span>
                       </div>
-
-                      {/* تفاصيل الوجبات في هذا الاقتراح */}
-                      <div className="space-y-3">
-                        {rec.items.map((item, iIdx) => (
-                          <div key={iIdx} className="flex items-center gap-3.5">
-                            <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 border-2 border-[#6B0F1A]/20 flex-shrink-0 shadow-sm">
-                              <Image
-                                src={getMealImageUrl(item.meal.name_ar, item.meal.image_url)}
-                                alt={item.meal.name_ar}
-                                fill
-                                unoptimized
-                                className="object-cover"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-black text-[#1E1210] text-base leading-snug">
-                                {item.quantity} × {item.meal.name_ar}
-                              </div>
-                              <div className="text-xs text-stone-600 flex items-center gap-2 mt-1 font-bold">
-                                <span className="text-[#6B0F1A] bg-[#FAF0F0] px-2 py-0.5 rounded-lg border border-[#6B0F1A]/20 font-black">{formatKcal(item.meal.total_kcal * item.quantity)}</span>
-                                <span>•</span>
-                                <span className="text-[#854D0E] bg-[#FEF9EE] px-2 py-0.5 rounded-lg border border-[#D97706]/30 font-black">{formatEgp((item.meal.discount_price ?? item.meal.price) * item.quantity)}</span>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="flex items-center">
+                        {shown.map((it, i) => (
+                          <span
+                            key={i}
+                            className={`relative w-12 h-12 rounded-full overflow-hidden border-2 ${on ? 'border-[#6B0F1A]' : 'border-white'} bg-stone-200 shadow-sm ${i > 0 ? '-mr-3' : ''}`}
+                            style={{ zIndex: 10 - i }}
+                          >
+                            <Image src={getMealImageUrl(it.meal.name_ar, it.meal.image_url)} alt="" fill unoptimized className="object-cover" />
+                          </span>
                         ))}
-                      </div>
-
-                      {/* شريط الإجمالي للكارت */}
-                      <div className="pt-3 border-t-2 border-stone-200/80 flex items-center justify-between text-xs">
-                        <div>
-                          <span className="text-stone-500 font-bold">إجمالي السعرات: </span>
-                          <span className="font-black text-emerald-800 text-sm">
-                            {formatKcal(rec.totalKcal)}
+                        {rec.items.length > shown.length && (
+                          <span className="-mr-3 w-12 h-12 rounded-full bg-[#F8F4EE] text-[#6B0F1A] border-2 border-white flex items-center justify-center font-black text-sm">
+                            +{rec.items.length - shown.length}
                           </span>
-                        </div>
-                        <div>
-                          <span className="text-stone-500 font-bold">السعر الكلي: </span>
-                          <span className="text-xl font-black text-[#6B0F1A]">
-                            {formatEgp(rec.totalPrice)}
-                          </span>
-                        </div>
+                        )}
                       </div>
-                    </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={`text-2xl font-black tabular-nums ${on ? 'text-white' : 'text-[#6B0F1A]'}`}>{formatEgp(rec.totalPrice)}</span>
+                        <span className={`text-sm font-black tabular-nums ${on ? 'text-white/80' : 'text-stone-500'}`}>{formatKcal(rec.totalKcal)}</span>
+                      </div>
+                    </button>
                   );
                 })}
-            </div>
+              </div>
+            </section>
 
-            {/* تفاصيل نصيب الأفراد للوجبة المحددة حالياً */}
-            {people.length > 0 && currentShares.length > 0 && (
-              <div className="p-6 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 font-black text-base text-[#1E1210]">
-                    <Users className="w-5 h-5 text-[#6B0F1A]" />
-                    <span>
-                      نصيب كل فرد من وجبة{' '}
-                      <span className="text-[#6B0F1A]">({selectedOpt?.items.map((i) => `${i.quantity}x ${i.meal.name_ar}`).join(' + ')})</span>:
-                    </span>
-                  </div>
-                  <Badge variant="default">حساب تلقائي حسب السعرات</Badge>
+            {/* تفاصيل الاقتراح المختار */}
+            {selectedOpt && (
+              <section className={`${shell} p-5 flex flex-col gap-4 min-h-0`} style={{ animationDelay: '160ms' }}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-2xl font-black flex-1">{selectedOpt.title_ar}</h2>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                  {currentShares.map((sh, sIdx) => (
-                    <div
-                      key={sIdx}
-                      className="p-4 rounded-2xl bg-[#FAF0F0] border border-[#6B0F1A]/20 text-xs space-y-1.5"
-                    >
-                      <div className="flex justify-between font-black text-[#1E1210]">
-                        <span>{sh.personName}</span>
-                        <span className="text-[#6B0F1A] font-extrabold">{sh.sharePercent}%</span>
+                <div className="space-y-2 overflow-y-auto max-h-[16rem] lg:max-h-[15rem] -mx-1 px-1">
+                  {selectedOpt.items.map((it, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-3xl bg-[#F8F4EE] border-2 border-[#E7D7C7] p-3">
+                      <span className="relative w-[4.5rem] h-[4.5rem] rounded-2xl overflow-hidden bg-stone-200 shrink-0">
+                        <Image src={getMealImageUrl(it.meal.name_ar, it.meal.image_url)} alt="" fill unoptimized className="object-cover" />
+                      </span>
+                      <span className="w-10 h-10 rounded-full bg-[#6B0F1A] text-white flex items-center justify-center font-black shrink-0">×{it.quantity}</span>
+                      <span className="flex-1 min-w-0 font-black text-xl leading-snug truncate">{it.meal.name_ar}</span>
+                      <span className="text-sm font-black text-stone-500 tabular-nums shrink-0">{formatKcal(it.meal.total_kcal * it.quantity)}</span>
+                      <span className="font-black text-[#6B0F1A] tabular-nums shrink-0">{formatEgp((it.meal.discount_price ?? it.meal.price) * it.quantity)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    { label: 'السعرات', value: kcalShown.toLocaleString('en-US'), unit: `من ${Math.round(targetKcal).toLocaleString('en-US')}`, pct: kcalPct, ok: kcalOk },
+                    { label: 'الإجمالي', value: priceShown.toLocaleString('en-US'), unit: `من ${budget.toLocaleString('en-US')} ج.م`, pct: pricePct, ok: priceOk },
+                  ].map((g) => (
+                    <div key={g.label} className="rounded-2xl bg-[#FAF0F0]/70 border-2 border-[#6B0F1A]/15 px-4 py-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-sm font-black text-stone-600">{g.label}</span>
+                        <span className="text-sm font-bold text-stone-500 tabular-nums">{g.unit}</span>
                       </div>
-                      <div className="text-emerald-800 font-black">
-                        {formatKcal(sh.shareKcal)}
-                      </div>
-                      <div className="text-stone-600 text-[11px] space-y-0.5 pt-1 border-t border-[#6B0F1A]/10 font-semibold">
-                        {sh.allocatedItems.map((it, itIdx) => (
-                          <div key={itIdx}>• {it.portionDescription}</div>
-                        ))}
+                      <div className="text-3xl font-black text-[#6B0F1A] tabular-nums leading-tight">{g.value}</div>
+                      <div className="mt-1.5 h-2.5 rounded-full bg-[#EADBCB] overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-l ${g.ok ? 'from-emerald-400 to-emerald-600' : 'from-[#E5A91E] to-[#D97706]'}`}
+                          style={{ width: `${Math.min(100, g.pct * 100)}%`, transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)' }}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+
+                {comboMacros && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { l: 'كارب', v: comboMacros.carbsG, t: macros.carbsG, bar: 'from-amber-300 to-amber-500', tone: 'text-amber-800' },
+                      { l: 'بروتين', v: comboMacros.proteinG, t: macros.proteinG, bar: 'from-rose-300 to-rose-500', tone: 'text-rose-800' },
+                      { l: 'دهون', v: comboMacros.fatG, t: macros.fatG, bar: 'from-sky-300 to-sky-500', tone: 'text-sky-800' },
+                    ].map((m) => (
+                      <div key={m.l} className="rounded-2xl bg-white border-2 border-[#E7D7C7] px-3 py-2.5">
+                        <div className="flex items-baseline justify-between gap-1">
+                          <span className={`text-sm font-black ${m.tone}`}>{m.l}</span>
+                          <span className="text-xs font-bold text-stone-500 tabular-nums">{comboMacros.estimated ? '~' : ''}{Math.round(m.v)} / {m.t}جم</span>
+                        </div>
+                        <div className="mt-1.5 h-2 rounded-full bg-[#EADBCB] overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-l ${m.bar}`}
+                            style={{ width: `${Math.min(100, m.t > 0 ? (m.v / m.t) * 100 : 0)}%`, transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)' }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {people.length > 0 && currentShares.length > 0 && (
+                  <div className="min-h-0">
+                    <div className="flex items-center gap-2 font-black text-stone-600 mb-2 px-1">
+                      <Users className="w-5 h-5 text-[#6B0F1A]" />
+                      <span>نصيب كل فرد</span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+                      {currentShares.map((sh, i) => (
+                        <div key={i} className="shrink-0 w-[12.5rem] rounded-2xl bg-white border-2 border-[#E7D7C7] p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 font-black">
+                            <span className="truncate">{sh.personName}</span>
+                            <span className="text-[#6B0F1A] tabular-nums">{sh.sharePercent}%</span>
+                          </div>
+                          <div className="text-sm font-black text-emerald-800 tabular-nums">{formatKcal(sh.shareKcal)}</div>
+                          <div className="text-xs font-bold text-stone-500 space-y-0.5 leading-snug">
+                            {sh.allocatedItems.map((it, k) => (
+                              <div key={k} className="truncate">{it.portionDescription}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
             )}
+          </div>
+        )}
 
-            {/* أزرار التأكيد والطباعة */}
-            <div className="flex items-center justify-between pt-4 border-t-2 border-[#E7D7C7]">
-              <Button
-                variant="outline"
-                onClick={() => router.push('/plan/budget')}
-                className="font-bold text-stone-800"
-              >
-                <ArrowRight className="w-5 h-5 ml-1.5" />
-                <span>تغيير الميزانية</span>
-              </Button>
-
-              <Button
-                size="xl"
-                variant="primary"
-                onClick={handleConfirmOrder}
-                disabled={!selectedOpt || ordering}
-                className="gap-2.5 px-10 font-black text-lg"
-              >
-                <Printer className="w-6 h-6 stroke-[2.25]" />
-                <span>{ordering ? 'جاري طباعة البون...' : 'تأكيد الوجبة وطباعة البون'}</span>
-              </Button>
-            </div>
+        {success && (
+          <div className="sticky bottom-0 z-20 -mx-5 sm:-mx-8 px-5 sm:px-8 py-3 bg-[#F8F4EE]/90 backdrop-blur-sm anim-fade-up flex items-center gap-3" style={{ animationDelay: '300ms' }}>
+            <Button variant="outline" size="lg" onClick={() => router.push('/plan/budget')} className="font-black">
+              <ArrowRight className="w-5 h-5 ml-1.5" />
+              <span>رجوع</span>
+            </Button>
+            <div className="flex-1" />
+            <Button size="xl" variant="primary" onClick={handleConfirmOrder} disabled={!selectedOpt || ordering} className="gap-2.5 px-12 font-black text-lg">
+              <Printer className="w-6 h-6 stroke-[2.25]" />
+              <span>{ordering ? '...' : 'تأكيد الطلب'}</span>
+            </Button>
           </div>
         )}
       </main>

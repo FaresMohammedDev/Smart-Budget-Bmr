@@ -1,0 +1,509 @@
+{
+ "meals": [
+  {
+   "id": "0c3d825d-87e0-4dfd-a152-2fa7c6db6b8a",
+   "category_id": "3d5bf994-21ad-43e5-ad83-e34e2ab5653d",
+   "name_ar": "بطاطس محمرة",
+   "name_en": "French Fries Box",
+   "description_ar": "علبة بطاطس مقلية ذهبية مقرمشة",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654512090.jfif",
+   "price": 35.0,
+   "kind": "side",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 403.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 46,
+   "protein_g": 4,
+   "fat_g": 22
+  },
+  {
+   "id": "047ad1a2-14cb-4076-bc0a-de75abad4d92",
+   "category_id": "78ce24e0-628a-41c6-a4e2-fd15957456a8",
+   "name_ar": "ربع فرخة مشوية بالأرز",
+   "name_en": "Quarter Grilled Chicken",
+   "description_ar": "ربع فرخة مشوية متبلة مع أرز بسمتي أبيض وسلطة",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654459767.jfif",
+   "price": 160.0,
+   "kind": "main",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 780.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 82,
+   "protein_g": 62,
+   "fat_g": 23
+  },
+  {
+   "id": "c7bd9ed6-de17-46cf-932f-9b2883204d58",
+   "category_id": "3bb9257d-8c39-4849-bc38-7ad3e4b18005",
+   "name_ar": "ساندوتش شاورما فراخ",
+   "name_en": "Chicken Shawarma Sandwich",
+   "description_ar": "شاورما فراخ طازجة بتتبيلة فتح الله مع الثومية في عيش سوري محمص",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653646666.jfif",
+   "price": 85.0,
+   "kind": "main",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 636.5,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 60,
+   "protein_g": 45,
+   "fat_g": 24
+  },
+  {
+   "id": "a9eb7958-26d6-4ca6-9c3e-3d3f2f0d6ed5",
+   "category_id": "3bb9257d-8c39-4849-bc38-7ad3e4b18005",
+   "name_ar": "ساندوتش طعمية",
+   "name_en": "Falafel Sandwich",
+   "description_ar": "ساندوتش طعمية سخنة مقرمشة بالسلطة والطحينة",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653771429.jfif",
+   "price": 25.0,
+   "kind": "main",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 481.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 60,
+   "protein_g": 14,
+   "fat_g": 20
+  },
+  {
+   "id": "e986fbb0-5930-4bfa-9282-25510369ccd2",
+   "category_id": "3bb9257d-8c39-4849-bc38-7ad3e4b18005",
+   "name_ar": "ساندوتش كبدة إسكندراني",
+   "name_en": "Alexandrian Liver Sandwich",
+   "description_ar": "كبدة إسكندراني متبلة بالفلفل الحار والليمون والخل والثوم",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653731062.jfif",
+   "price": 60.0,
+   "kind": "main",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 499.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 50,
+   "protein_g": 37,
+   "fat_g": 17
+  },
+  {
+   "id": "d6af5d58-33d0-4c75-a2aa-9093f071c29a",
+   "category_id": "3bb9257d-8c39-4849-bc38-7ad3e4b18005",
+   "name_ar": "ساندوتش كفتة",
+   "name_en": "Kofta Sandwich",
+   "description_ar": "كفتة بلدي مشوية على الفحم مع سلطة طحينة في عيش بلدي طازج",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653702947.jfif",
+   "price": 95.0,
+   "kind": "main",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 889.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 80,
+   "protein_g": 53,
+   "fat_g": 40
+  },
+  {
+   "id": "09b959cc-15ad-41a2-9db7-7607f59ad817",
+   "category_id": "3d5bf994-21ad-43e5-ad83-e34e2ab5653d",
+   "name_ar": "سلطة خضراء",
+   "name_en": "Green Salad Plate",
+   "description_ar": "سلطة بلدي طازجة بالخيار والطماطم والخضروات",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653674671.jfif",
+   "price": 20.0,
+   "kind": "side",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 40.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 6,
+   "protein_g": 1,
+   "fat_g": 1
+  },
+  {
+   "id": "86b3835a-d8cf-4f15-ab16-f0bbbd295c06",
+   "category_id": "3d5bf994-21ad-43e5-ad83-e34e2ab5653d",
+   "name_ar": "سلطة طحينة",
+   "name_en": "Tahini Salad Plate",
+   "description_ar": "طبق سلطة طحينة سمسم بيضاء متبلة بالليمون والكمون",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654585971.jfif",
+   "price": 20.0,
+   "kind": "side",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 150.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 7,
+   "protein_g": 4,
+   "fat_g": 12
+  },
+  {
+   "id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "category_id": "78ce24e0-628a-41c6-a4e2-fd15957456a8",
+   "name_ar": "صينية مشويات مشكلة عائلي",
+   "name_en": "Family Mixed Grill Tray",
+   "description_ar": "مشكل كفتة وشيش وفراخ مشوية تكفي 5 أفراد مع أرز وسلطات",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653609999.jfif",
+   "price": 750.0,
+   "kind": "main",
+   "portion_type": "shareable",
+   "servings": 5,
+   "total_kcal": 3600.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 252,
+   "protein_g": 324,
+   "fat_g": 144
+  },
+  {
+   "id": "39bd857c-45c8-4cfe-8930-9a97b80cec7b",
+   "category_id": "91995ee6-c75c-41e9-8caf-06ccb777556e",
+   "name_ar": "صينية مكرونة بشاميل صغيرة",
+   "name_en": "Small Bechamel Pasta Tray",
+   "description_ar": "صينية مكرونة بشاميل دافئة تكفي شخصين",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653575399.jfif",
+   "price": 170.0,
+   "kind": "main",
+   "portion_type": "shareable",
+   "servings": 2,
+   "total_kcal": 1400.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": 140.0,
+   "is_expiring_soon": true,
+   "carbs_g": 140,
+   "protein_g": 56,
+   "fat_g": 68
+  },
+  {
+   "id": "8107ddfa-0b2a-4cde-b881-c6544c06cf7d",
+   "category_id": "91995ee6-c75c-41e9-8caf-06ccb777556e",
+   "name_ar": "صينية مكرونة بشاميل عائلي",
+   "name_en": "Family Bechamel Pasta Tray",
+   "description_ar": "صينية مكرونة بشاميل غنية باللحمة المفرومة والجبنة تكفي 4 أفراد",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792653813661.jfif",
+   "price": 320.0,
+   "kind": "main",
+   "portion_type": "shareable",
+   "servings": 4,
+   "total_kcal": 2810.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": 260.0,
+   "is_expiring_soon": true,
+   "carbs_g": 281,
+   "protein_g": 112,
+   "fat_g": 137
+  },
+  {
+   "id": "bdd6ead2-1d46-4fc2-b734-7f30c3732a20",
+   "category_id": "3d5bf994-21ad-43e5-ad83-e34e2ab5653d",
+   "name_ar": "طبق فول بالعيش",
+   "name_en": "Foul Plate with Bread",
+   "description_ar": "طبق فول مدمس بالزيت الحار والليمون مع 2 رغيف بلدي",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654613073.jfif",
+   "price": 25.0,
+   "kind": "side",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 720.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 94,
+   "protein_g": 36,
+   "fat_g": 22
+  },
+  {
+   "id": "3c5c40b2-7c68-4e72-b903-93c4dca19c46",
+   "category_id": "3ea76a39-6ba9-4131-8afb-e44eba08d513",
+   "name_ar": "مشروب غازي",
+   "name_en": "Soft Drink Can",
+   "description_ar": "كانز مشروب غازي منعش 330 مل",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654689014.jfif",
+   "price": 20.0,
+   "kind": "drink",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 140.0,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 35,
+   "protein_g": 0,
+   "fat_g": 0
+  },
+  {
+   "id": "6d2e9147-a52e-4199-b84b-ec3ab613b8ef",
+   "category_id": "3ea76a39-6ba9-4131-8afb-e44eba08d513",
+   "name_ar": "مياه معدنية",
+   "name_en": "Mineral Water Bottle",
+   "description_ar": "زجاجة مياه معدنية طبيعية 600 مل",
+   "description_en": null,
+   "image_url": "https://dvihewhnspmxyigdeikp.supabase.co/storage/v1/object/public/meal-images/meal-1792654643778.jfif",
+   "price": 10.0,
+   "kind": "drink",
+   "portion_type": "individual",
+   "servings": 1,
+   "total_kcal": 0.01,
+   "is_available": true,
+   "created_at": "2026-10-04T21:00:48.649459+00:00",
+   "updated_at": "2026-11-07T14:07:59.540701+00:00",
+   "discount_price": null,
+   "is_expiring_soon": false,
+   "carbs_g": 0,
+   "protein_g": 0,
+   "fat_g": 0
+  }
+ ],
+ "meal_items": [
+  {
+   "meal_id": "d6af5d58-33d0-4c75-a2aa-9093f071c29a",
+   "food_item_id": "cc951847-369b-4682-aa42-df44a62907a9",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "d2e68324-08e4-4188-a2b1-67eb1f9aaf5b",
+   "quantity": 4.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "d8fb1264-dd42-4afa-b54f-68087d37531e",
+   "quantity": 500.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "922657e3-f0c1-4ce8-bd37-60aed2c6140e",
+   "quantity": 700.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "1d897cd6-b718-4e11-8da8-711336ac2977",
+   "quantity": 800.0
+  },
+  {
+   "meal_id": "39bd857c-45c8-4cfe-8930-9a97b80cec7b",
+   "food_item_id": "f455b164-86bd-434f-adcd-ac011f3bc16c",
+   "quantity": 400.0
+  },
+  {
+   "meal_id": "39bd857c-45c8-4cfe-8930-9a97b80cec7b",
+   "food_item_id": "4bc2a33e-6128-4d33-bab6-1e49bf4fafd3",
+   "quantity": 250.0
+  },
+  {
+   "meal_id": "39bd857c-45c8-4cfe-8930-9a97b80cec7b",
+   "food_item_id": "994a9584-988d-4eb1-b41f-235a53fb1965",
+   "quantity": 150.0
+  },
+  {
+   "meal_id": "39bd857c-45c8-4cfe-8930-9a97b80cec7b",
+   "food_item_id": "28a7f4ea-8957-4c8c-9a03-31f0703ba15e",
+   "quantity": 50.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "bb871473-d284-4b33-aa32-243034b7c02c",
+   "quantity": 300.0
+  },
+  {
+   "meal_id": "047ad1a2-14cb-4076-bc0a-de75abad4d92",
+   "food_item_id": "bb871473-d284-4b33-aa32-243034b7c02c",
+   "quantity": 100.0
+  },
+  {
+   "meal_id": "a9eb7958-26d6-4ca6-9c3e-3d3f2f0d6ed5",
+   "food_item_id": "bb871473-d284-4b33-aa32-243034b7c02c",
+   "quantity": 30.0
+  },
+  {
+   "meal_id": "0b0bc3a6-1b6d-4a5b-be9c-b6c68054308d",
+   "food_item_id": "abc9ba9b-0186-4365-9f42-e1c033b13842",
+   "quantity": 100.0
+  },
+  {
+   "meal_id": "a9eb7958-26d6-4ca6-9c3e-3d3f2f0d6ed5",
+   "food_item_id": "abc9ba9b-0186-4365-9f42-e1c033b13842",
+   "quantity": 15.0
+  },
+  {
+   "meal_id": "e986fbb0-5930-4bfa-9282-25510369ccd2",
+   "food_item_id": "abc9ba9b-0186-4365-9f42-e1c033b13842",
+   "quantity": 15.0
+  },
+  {
+   "meal_id": "c7bd9ed6-de17-46cf-932f-9b2883204d58",
+   "food_item_id": "bf8d5a35-4d85-493f-82d4-4b0cc0321103",
+   "quantity": 15.0
+  },
+  {
+   "meal_id": "c7bd9ed6-de17-46cf-932f-9b2883204d58",
+   "food_item_id": "cc951847-369b-4682-aa42-df44a62907a9",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "c7bd9ed6-de17-46cf-932f-9b2883204d58",
+   "food_item_id": "d0ef5f39-b068-40a2-9077-b298799dc35a",
+   "quantity": 150.0
+  },
+  {
+   "meal_id": "c7bd9ed6-de17-46cf-932f-9b2883204d58",
+   "food_item_id": "5ff3205f-0f5f-4f49-9464-db634ad7270f",
+   "quantity": 30.0
+  },
+  {
+   "meal_id": "d6af5d58-33d0-4c75-a2aa-9093f071c29a",
+   "food_item_id": "d2e68324-08e4-4188-a2b1-67eb1f9aaf5b",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "d6af5d58-33d0-4c75-a2aa-9093f071c29a",
+   "food_item_id": "d8fb1264-dd42-4afa-b54f-68087d37531e",
+   "quantity": 130.0
+  },
+  {
+   "meal_id": "d6af5d58-33d0-4c75-a2aa-9093f071c29a",
+   "food_item_id": "abc9ba9b-0186-4365-9f42-e1c033b13842",
+   "quantity": 25.0
+  },
+  {
+   "meal_id": "e986fbb0-5930-4bfa-9282-25510369ccd2",
+   "food_item_id": "d2e68324-08e4-4188-a2b1-67eb1f9aaf5b",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "e986fbb0-5930-4bfa-9282-25510369ccd2",
+   "food_item_id": "0b5b56ce-3c76-4835-a626-c333f40213c0",
+   "quantity": 120.0
+  },
+  {
+   "meal_id": "a9eb7958-26d6-4ca6-9c3e-3d3f2f0d6ed5",
+   "food_item_id": "d2e68324-08e4-4188-a2b1-67eb1f9aaf5b",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "a9eb7958-26d6-4ca6-9c3e-3d3f2f0d6ed5",
+   "food_item_id": "d9f654bc-b086-452e-8753-c576f9c59cb1",
+   "quantity": 3.0
+  },
+  {
+   "meal_id": "8107ddfa-0b2a-4cde-b881-c6544c06cf7d",
+   "food_item_id": "f455b164-86bd-434f-adcd-ac011f3bc16c",
+   "quantity": 500.0
+  },
+  {
+   "meal_id": "8107ddfa-0b2a-4cde-b881-c6544c06cf7d",
+   "food_item_id": "994a9584-988d-4eb1-b41f-235a53fb1965",
+   "quantity": 400.0
+  },
+  {
+   "meal_id": "8107ddfa-0b2a-4cde-b881-c6544c06cf7d",
+   "food_item_id": "4bc2a33e-6128-4d33-bab6-1e49bf4fafd3",
+   "quantity": 400.0
+  },
+  {
+   "meal_id": "8107ddfa-0b2a-4cde-b881-c6544c06cf7d",
+   "food_item_id": "28a7f4ea-8957-4c8c-9a03-31f0703ba15e",
+   "quantity": 150.0
+  },
+  {
+   "meal_id": "047ad1a2-14cb-4076-bc0a-de75abad4d92",
+   "food_item_id": "922657e3-f0c1-4ce8-bd37-60aed2c6140e",
+   "quantity": 250.0
+  },
+  {
+   "meal_id": "047ad1a2-14cb-4076-bc0a-de75abad4d92",
+   "food_item_id": "1d897cd6-b718-4e11-8da8-711336ac2977",
+   "quantity": 200.0
+  },
+  {
+   "meal_id": "0c3d825d-87e0-4dfd-a152-2fa7c6db6b8a",
+   "food_item_id": "08a1bc47-3a71-4a88-b3a4-dfe386662cd6",
+   "quantity": 130.0
+  },
+  {
+   "meal_id": "09b959cc-15ad-41a2-9db7-7607f59ad817",
+   "food_item_id": "bb871473-d284-4b33-aa32-243034b7c02c",
+   "quantity": 200.0
+  },
+  {
+   "meal_id": "86b3835a-d8cf-4f15-ab16-f0bbbd295c06",
+   "food_item_id": "abc9ba9b-0186-4365-9f42-e1c033b13842",
+   "quantity": 50.0
+  },
+  {
+   "meal_id": "bdd6ead2-1d46-4fc2-b734-7f30c3732a20",
+   "food_item_id": "62fea566-5309-487b-8d2e-615173725691",
+   "quantity": 200.0
+  },
+  {
+   "meal_id": "bdd6ead2-1d46-4fc2-b734-7f30c3732a20",
+   "food_item_id": "d2e68324-08e4-4188-a2b1-67eb1f9aaf5b",
+   "quantity": 2.0
+  },
+  {
+   "meal_id": "6d2e9147-a52e-4199-b84b-ec3ab613b8ef",
+   "food_item_id": "2f7c5503-1bca-4e52-8b59-aa7939c5b654",
+   "quantity": 1.0
+  },
+  {
+   "meal_id": "3c5c40b2-7c68-4e72-b903-93c4dca19c46",
+   "food_item_id": "f873899c-bdc7-4908-8b7b-9a343e582415",
+   "quantity": 1.0
+  }
+ ]
+}

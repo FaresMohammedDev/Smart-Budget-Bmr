@@ -5,14 +5,10 @@ import { useRouter } from 'next/navigation';
 import {
   Users,
   User,
-  Flame,
   ArrowLeft,
   ArrowRight,
-  Activity,
   Bookmark,
   BookmarkCheck,
-  Plus,
-  Minus,
   Trash2,
   X,
   Check,
@@ -20,18 +16,57 @@ import {
   UserCheck,
   Heart,
   Smile,
-  Zap,
+  Mars,
+  Venus,
+  Copy,
+  LogOut,
+  Plus,
 } from 'lucide-react';
 import { KioskHeader } from '@/components/layout/KioskHeader';
+import { StepBar } from '@/components/layout/StepBar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { TouchStepper } from '@/components/ui/TouchStepper';
+import { DialStepper } from '@/components/people/DialStepper';
+import { KcalRing, useCountUp } from '@/components/people/KcalRing';
 import { usePlannerStore } from '@/features/planner/store/planner.store';
 import { calculateBmr } from '@/features/nutrition/domain/bmr';
 import { calculateTdee } from '@/features/nutrition/domain/tdee';
-import { formatKcal } from '@/lib/format';
-import { ActivityLevel } from '@/features/nutrition/domain/types';
+import { calculateMacroTargets } from '@/features/nutrition/domain/macros';
+import { ActivityLevel, PersonInput } from '@/features/nutrition/domain/types';
 import { createClient } from '@/lib/supabase/client';
+import { validatePeople } from '@/lib/data/order';
+import { getDataMode } from '@/lib/data/config';
+import { listGroups, saveGroup, deleteGroup, errorMessage, type SavedGroup } from '@/lib/data/repository';
+
+async function fetchGroupSession() {
+  const local = getDataMode() === 'local';
+  const user = local ? { id: 'local-demo', is_anonymous: false, email: 'مجموعات العرض المحلي' } : (await createClient().auth.getUser()).data.user;
+  const groups = user && !user.is_anonymous ? await listGroups() : [];
+  return { user, groups };
+}
+
+function personTdee(p?: PersonInput): number {
+  if (!p || p.weightKg <= 0 || p.heightCm <= 0 || p.age <= 0) return 0;
+  try {
+    return Math.round(calculateTdee(calculateBmr(p.gender, p.weightKg, p.heightCm, p.age), p.activityLevel));
+  } catch {
+    return 0;
+  }
+}
+
+const ACTIVITY: { id: ActivityLevel; label: string }[] = [
+  { id: 'sedentary', label: 'قليل' },
+  { id: 'light', label: 'خفيف' },
+  { id: 'moderate', label: 'متوسط' },
+  { id: 'active', label: 'عالي' },
+];
+
+const PRESETS = [
+  { key: 'young_man', label: 'شاب', icon: UserCheck },
+  { key: 'young_woman', label: 'شابة', icon: Sparkles },
+  { key: 'child', label: 'طفل', icon: Smile },
+  { key: 'senior', label: 'كبير', icon: Heart },
+] as const;
 
 export default function PeopleStepPage() {
   const router = useRouter();
@@ -48,10 +83,11 @@ export default function PeopleStepPage() {
   const [activeTab, setActiveTab] = useState(0);
 
   // حالة المستخدم والمجموعات المحفوظة
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [savedGroups, setSavedGroups] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<{ id: string; is_anonymous?: boolean; email?: string; user_metadata?: { full_name?: string } } | null>(null);
+  const [savedGroups, setSavedGroups] = useState<SavedGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [saveGroupError, setSaveGroupError] = useState('');
@@ -69,58 +105,21 @@ export default function PeopleStepPage() {
   // جلب المستخدم والمجموعات المحفوظة
   const loadUserAndGroups = async () => {
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user && !user.is_anonymous) {
-        setCurrentUser(user);
-        setLoadingGroups(true);
-        const { data: groups, error } = await supabase
-          .from('saved_groups')
-          .select(
-            `
-            id,
-            name,
-            created_at,
-            group_members (
-              id,
-              name,
-              age,
-              gender,
-              height_cm,
-              weight_kg,
-              activity_level,
-              sort_order
-            )
-          `
-          )
-          .order('created_at', { ascending: false });
-
-        if (!error && groups) {
-          setSavedGroups(groups);
-        }
-      } else {
-        setCurrentUser(null);
-        setSavedGroups([]);
-      }
-    } catch {
-      //
-    } finally {
-      setLoadingGroups(false);
-    }
+      const { user, groups } = await fetchGroupSession();
+      setCurrentUser(user);
+      setSavedGroups(groups);
+    } catch (error) { setStatusMessage(errorMessage(error)); }
+    finally { setLoadingGroups(false); }
   };
 
   // تسجيل الخروج والتحول إلى زائر
   const handleLogout = async () => {
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      if (getDataMode() === 'supabase') await createClient().auth.signOut();
       setCurrentUser(null);
       setSavedGroups([]);
       setSavedGroupId(null);
-      setStatusMessage('تم تسجيل الخروج بنجاح والمتابعة كزائر.');
+      setStatusMessage('تم الخروج');
       setTimeout(() => setStatusMessage(''), 3000);
     } catch {
       //
@@ -128,32 +127,26 @@ export default function PeopleStepPage() {
   };
 
   useEffect(() => {
-    loadUserAndGroups();
+    let active = true;
+    fetchGroupSession().then(({user, groups}) => { if (active) { setCurrentUser(user); setSavedGroups(groups); } }).catch(error => { if (active) setStatusMessage(errorMessage(error)); }).finally(() => { if (active) setLoadingGroups(false); });
+    return () => { active = false; };
   }, []);
 
   const currentPerson = people[activeTab] || people[0];
 
-  // حساب BMR و TDEE الحي لكل فرد
-  let liveBmr = 0;
-  let liveTdee = 0;
-  if (
-    currentPerson &&
-    currentPerson.weightKg > 0 &&
-    currentPerson.heightCm > 0 &&
-    currentPerson.age > 0
-  ) {
-    try {
-      liveBmr = calculateBmr(
-        currentPerson.gender,
-        currentPerson.weightKg,
-        currentPerson.heightCm,
-        currentPerson.age
-      );
-      liveTdee = calculateTdee(liveBmr, currentPerson.activityLevel);
-    } catch {
-      //
+  const liveTdee = personTdee(currentPerson);
+  const macros = calculateMacroTargets(liveTdee);
+  const groupTdee = people.reduce((sum, p) => sum + personTdee(p), 0);
+  const groupShown = useCountUp(groupTdee);
+
+  const openGroups = () => {
+    if (!currentUser || currentUser.is_anonymous) {
+      setAuthMode('login');
+      setShowAuthModal(true);
+    } else {
+      setShowGroupsModal(true);
     }
-  }
+  };
 
   // ملء بيانات سريعة (1-Tap Presets) لتسهيل الـ UX على الكيوسك
   const applyPreset = (preset: 'young_man' | 'young_woman' | 'child' | 'senior') => {
@@ -193,41 +186,27 @@ export default function PeopleStepPage() {
   };
 
   // استرجاع مجموعة محفوظة
-  const handleLoadGroup = (group: any) => {
-    if (!group.group_members || group.group_members.length === 0) return;
-    const sortedMembers = [...group.group_members].sort(
-      (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
-    );
-
-    setPeople(
-      sortedMembers.map((m) => ({
-        name: m.name,
-        age: Number(m.age),
-        gender: m.gender,
-        heightCm: Number(m.height_cm),
-        weightKg: Number(m.weight_kg),
-        activityLevel: m.activity_level,
-      }))
-    );
+  const handleLoadGroup = (group: SavedGroup) => {
+    if (!group.people.length) return;
+    setPeople(group.people);
     setActiveTab(0);
     setSavedGroupId(group.id);
-    setStatusMessage(`تم استرجاع مجموعة "${group.name}" بنجاح (${sortedMembers.length} أفراد)`);
-    setTimeout(() => setStatusMessage(''), 4500);
+    setShowGroupsModal(false);
+    setStatusMessage(`تم تحميل "${group.name}"`);
   };
 
   // حذف مجموعة محفوظة
   const handleDeleteGroup = async (e: React.MouseEvent, groupId: string, groupName: string) => {
     e.stopPropagation();
-    if (!window.confirm(`هل أنت متأكد من حذف مجموعة "${groupName}" نهائياً؟`)) return;
+    if (!window.confirm(`حذف "${groupName}"؟`)) return;
 
     try {
-      const supabase = createClient();
-      await supabase.from('saved_groups').delete().eq('id', groupId);
+      await deleteGroup(groupId);
       if (savedGroupId === groupId) {
         setSavedGroupId(null);
       }
       setSavedGroups((prev) => prev.filter((g) => g.id !== groupId));
-      setStatusMessage(`تم حذف مجموعة "${groupName}"`);
+      setStatusMessage('تم الحذف');
       setTimeout(() => setStatusMessage(''), 3000);
     } catch {
       //
@@ -237,7 +216,7 @@ export default function PeopleStepPage() {
   // فتح نافذة الحفظ
   const handleOpenSaveModal = () => {
     setSaveGroupError('');
-    if (!currentUser || currentUser.is_anonymous) {
+    if (getDataMode() !== 'local' && (!currentUser || currentUser.is_anonymous)) {
       setShowAuthModal(true);
     } else {
       setShowSaveModal(true);
@@ -248,68 +227,22 @@ export default function PeopleStepPage() {
   const handleSaveGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) {
-      setSaveGroupError('يرجى كتابة اسم للمجموعة');
+      setSaveGroupError('اكتب اسم المجموعة');
       return;
     }
     setSaveGroupError('');
     setIsSavingGroup(true);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user || user.is_anonymous) {
-        setIsSavingGroup(false);
-        setShowSaveModal(false);
-        setShowAuthModal(true);
-        return;
-      }
-
-      const { data: groupData, error: groupError } = await supabase
-        .from('saved_groups')
-        .insert({
-          user_id: user.id,
-          name: newGroupName.trim(),
-        })
-        .select()
-        .single();
-
-      if (groupError) {
-        if (groupError.message.includes('unique') || groupError.code === '23505') {
-          throw new Error('لديك مجموعة بهذا الاسم بالفعل. اختر اسماً مميزاً آخر.');
-        }
-        throw new Error(groupError.message);
-      }
-
-      const membersToInsert = people.map((p, idx) => ({
-        group_id: groupData.id,
-        name: p.name || `فرد ${idx + 1}`,
-        age: p.age,
-        gender: p.gender,
-        height_cm: p.heightCm,
-        weight_kg: p.weightKg,
-        activity_level: p.activityLevel,
-        sort_order: idx + 1,
-      }));
-
-      const { error: membersError } = await supabase
-        .from('group_members')
-        .insert(membersToInsert);
-
-      if (membersError) {
-        throw new Error(membersError.message);
-      }
-
-      setSavedGroupId(groupData.id);
+      const id = await saveGroup(newGroupName, people);
+      setSavedGroupId(id);
       setShowSaveModal(false);
       setNewGroupName('');
-      setStatusMessage(`تم حفظ مجموعة "${groupData.name}" بنجاح!`);
+      setStatusMessage(`تم حفظ "${newGroupName}"`);
       setTimeout(() => setStatusMessage(''), 5000);
       await loadUserAndGroups();
     } catch (err: unknown) {
-      setSaveGroupError(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ المجموعة');
+      setSaveGroupError(err instanceof Error ? err.message : 'تعذر الحفظ');
     } finally {
       setIsSavingGroup(false);
     }
@@ -330,7 +263,7 @@ export default function PeopleStepPage() {
         });
         if (error) throw error;
       } else {
-        if (!authFullName.trim()) throw new Error('يرجى إدخال اسمك بالكامل');
+        if (!authFullName.trim()) throw new Error('اكتب اسمك');
         const { data, error } = await supabase.auth.signUp({
           email: authEmail,
           password: authPassword,
@@ -359,7 +292,7 @@ export default function PeopleStepPage() {
       await loadUserAndGroups();
       setShowSaveModal(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'حدث خطأ في التسجيل';
+      const msg = err instanceof Error ? err.message : 'تعذر التسجيل';
       setAuthError(msg);
     } finally {
       setAuthLoading(false);
@@ -379,455 +312,305 @@ export default function PeopleStepPage() {
       name: p.name || `فرد ${idx + 1}`,
     }));
     setPeople(updated);
-    setStatusMessage(`تم تطبيق البيانات بنجاح على جميع الأفراد (${peopleCount})!`);
+    setStatusMessage('تم التطبيق على الكل');
     setTimeout(() => setStatusMessage(''), 4000);
   };
 
   const handleNext = () => {
-    router.push('/plan/budget');
+    try { validatePeople(people); router.push('/plan/budget'); } catch (error) { setStatusMessage(errorMessage(error)); }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F4EE] text-[#1E1210] flex flex-col">
+    <div className="relative min-h-screen overflow-x-clip bg-[#F8F4EE] text-[#1E1210] flex flex-col select-none">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="anim-blob absolute -top-32 -right-24 w-[30rem] h-[30rem] rounded-full bg-[#6B0F1A]/12 blur-3xl" />
+        <div className="anim-blob-slow absolute -bottom-40 -left-28 w-[34rem] h-[34rem] rounded-full bg-[#E5A91E]/20 blur-3xl" />
+      </div>
+
       <KioskHeader />
 
-      <main className="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-8 space-y-6">
-        {/* شريط المراحل الملون والواضح */}
-        <div className="flex items-center justify-between text-xs sm:text-sm font-bold border-b-2 border-[#E7D7C7] pb-4">
-          <div className="flex items-center gap-2 text-[#6B0F1A]">
-            <span className="w-7 h-7 rounded-full bg-[#6B0F1A] text-white flex items-center justify-center font-black text-xs border border-[#3E080F] shadow-xs">
-              1
-            </span>
-            <span className="font-black">بيانات الأفراد والحجم</span>
-          </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-200" />
-          <div className="flex items-center gap-2 text-stone-400">
-            <span className="w-7 h-7 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs">
-              2
-            </span>
-            <span>الميزانية ونوع الوجبة</span>
-          </div>
-          <div className="h-1 flex-1 mx-4 rounded-full bg-stone-200" />
-          <div className="flex items-center gap-2 text-stone-400">
-            <span className="w-7 h-7 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-xs">
-              3
-            </span>
-            <span>ترشيح الوجبات</span>
-          </div>
+      <main className="relative z-10 flex-1 min-h-0 w-full max-w-[92rem] mx-auto px-5 sm:px-8 py-4 sm:py-5 flex flex-col gap-4">
+        <div className="anim-fade-up">
+          <StepBar current={1} />
         </div>
 
-        {/* تنبيه حالة نجاح الحفظ أو التحميل */}
         {statusMessage && (
-          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-sm animate-in fade-in">
-            <BookmarkCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div
+            role="status"
+            className="anim-fade-up fixed top-20 left-1/2 -translate-x-1/2 z-[60] px-6 py-3 rounded-full bg-[#1E1210] text-white font-black text-sm shadow-2xl flex items-center gap-2"
+          >
+            <BookmarkCheck className="w-5 h-5 text-[#E5A91E]" />
             <span>{statusMessage}</span>
           </div>
         )}
 
-        {/* شريط حساب المستخدم أو الزائر */}
-        {currentUser ? (
-          <div className="p-5 rounded-3xl bg-white border border-orange-200 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2 text-sm font-black text-stone-900">
-                <Bookmark className="w-4 h-4 text-orange-600" />
-                <span>مجموعاتك المحفوظة (Saved Groups):</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-stone-600">
-                  مرحباً بك {currentUser.user_metadata?.full_name || currentUser.email}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="text-xs text-red-600 hover:text-red-700 underline font-bold cursor-pointer"
-                >
-                  تسجيل الخروج
-                </button>
-              </div>
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[19.4rem_1fr] gap-5">
+          {/* العدد وقائمة الأفراد */}
+          <aside className="anim-fade-up min-h-0 flex flex-col gap-4 rounded-[32px] bg-white/90 backdrop-blur border-2 border-[#E7D7C7] shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)] p-5" style={{ animationDelay: '80ms' }}>
+            <div className="flex shrink-0">
+              <DialStepper
+                label="عدد الأفراد"
+                size="lg"
+                value={peopleCount}
+                min={1}
+                max={30}
+                onChange={(n) => {
+                  setPeopleCount(n);
+                  setSavedGroupId(null);
+                  if (activeTab >= n) setActiveTab(0);
+                }}
+              />
             </div>
 
-            {loadingGroups ? (
-              <div className="text-xs text-stone-500 py-1">جاري تحميل مجموعاتك...</div>
-            ) : savedGroups.length > 0 ? (
-              <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
-                {savedGroups.map((grp) => {
-                  const isSelected = savedGroupId === grp.id;
-                  const count = grp.group_members?.length || 0;
-                  return (
-                    <div
-                      key={grp.id}
-                      onClick={() => handleLoadGroup(grp)}
-                      className={`px-4 py-2.5 rounded-2xl flex items-center gap-2.5 cursor-pointer transition-all border shrink-0 ${
-                        isSelected
-                          ? 'bg-orange-50 border-orange-500 text-orange-950 font-black shadow-sm'
-                          : 'bg-stone-50 border-stone-200 text-stone-700 hover:border-orange-300'
+            <div className="flex-1 min-h-[120px] overflow-y-auto -mx-1 px-1 space-y-2 pb-1">
+              {people.map((p, idx) => {
+                const active = idx === activeTab;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveTab(idx)}
+                    className={`group w-full flex items-center gap-3 rounded-2xl p-2.5 border-2 text-right transition-all duration-300 cursor-pointer ${
+                      active
+                        ? 'bg-gradient-to-l from-[#6B0F1A] to-[#8B1422] border-[#3E080F] text-white shadow-lg -translate-x-1'
+                        : 'bg-white border-[#E7D7C7] hover:border-[#6B0F1A]/50 hover:-translate-x-0.5'
+                    }`}
+                  >
+                    <span
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-lg shrink-0 ${
+                        active ? 'bg-white/20' : 'bg-[#F8F4EE] text-[#6B0F1A]'
                       }`}
                     >
-                      <Users className="w-4 h-4 text-orange-600" />
-                      <div className="text-right">
-                        <div className="font-bold text-xs">{grp.name}</div>
-                        <div className="text-[10px] text-stone-500">{count} أفراد</div>
-                      </div>
-
-                      {isSelected && (
-                        <span className="w-4 h-4 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-black">
-                          <Check className="w-3 h-3 stroke-[2.5]" />
-                        </span>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteGroup(e, grp.id, grp.name)}
-                        className="p-1 rounded-lg hover:bg-red-100 text-stone-400 hover:text-red-600 transition-colors ml-1"
-                        title="حذف هذه المجموعة"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-3 rounded-2xl bg-orange-50/50 border border-dashed border-orange-200 text-xs text-stone-600 flex items-center justify-between flex-wrap gap-2">
-                <span>لا توجد مجموعات محفوظة حالياً. يمكنك إدخال الأفراد وحفظهم للزيارات القادمة!</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="p-4 rounded-2xl bg-white border border-orange-200 shadow-sm text-xs text-stone-600 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>أنت تتصفح كـ <strong className="text-stone-900 font-black">طلب فوري بدون تسجيل</strong>. يمكنك الطلب فوراً أو تسجيل الدخول إن أردت.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode('login');
-                setShowAuthModal(true);
-              }}
-              className="text-orange-600 hover:text-red-600 hover:underline font-black cursor-pointer"
-            >
-              تسجيل الدخول لاسترجاع مجموعاتي ↗
-            </button>
-          </div>
-        )}
-
-        {/* كارت اختيار عدد الأفراد - يدعم حتى 30 فرداً */}
-        <div className="p-6 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-5">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-[#6B0F1A] text-white shadow-xs">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-[#1E1210]">كم شخص سيتناول الوجبة؟</h2>
-                <p className="text-xs text-stone-500 font-semibold">
-                  اختر عدد الأفراد (يدعم المجموعات والعائلات والعزائم الكبيرة حتى 30 فرداً)
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* عداد زيادة ونقصان ملموس 3D للوصول لأي عدد */}
-              <div className="flex items-center gap-2 bg-[#F8F4EE] p-1.5 rounded-2xl border-2 border-[#E7D7C7]">
+                      {idx + 1}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-black truncate">{p.name || `فرد ${idx + 1}`}</span>
+                      <span className={`block text-sm font-bold tabular-nums ${active ? 'text-white/80' : 'text-stone-500'}`}>
+                        {personTdee(p).toLocaleString('en-US')}
+                      </span>
+                    </span>
+                    {active && <Check className="w-5 h-5 stroke-[3] text-[#E5A91E]" />}
+                  </button>
+                );
+              })}
+              {peopleCount < 30 && (
                 <button
                   type="button"
                   onClick={() => {
-                    if (peopleCount > 1) {
-                      const next = peopleCount - 1;
-                      setPeopleCount(next);
-                      setSavedGroupId(null);
-                      if (activeTab >= next) setActiveTab(0);
-                    }
-                  }}
-                  disabled={peopleCount <= 1}
-                  className="w-11 h-11 rounded-xl bg-white text-stone-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 font-black text-xl flex items-center justify-center cursor-pointer"
-                  title="تقليل عدد الأفراد"
-                >
-                  <Minus className="w-4 h-4 stroke-[3]" />
-                </button>
-
-                <div className="text-center px-3 min-w-[70px]">
-                  <span className="text-2xl font-black text-[#1E1210] block leading-none">{peopleCount}</span>
-                  <span className="text-[10px] font-black text-[#854D0E]">
-                    {peopleCount === 1 ? 'فرد' : peopleCount === 2 ? 'فردين' : peopleCount <= 10 ? 'أفراد' : 'فرداً'}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (peopleCount < 30) {
-                      const next = peopleCount + 1;
-                      setPeopleCount(next);
-                      setSavedGroupId(null);
-                    }
-                  }}
-                  disabled={peopleCount >= 30}
-                  className="w-11 h-11 rounded-xl bg-[#6B0F1A] text-white disabled:opacity-40 disabled:cursor-not-allowed border-2 border-[#3E080F] shadow-[0_3px_0_0_#3E080F] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 font-black text-xl flex items-center justify-center cursor-pointer"
-                  title="زيادة عدد الأفراد"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                </button>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleOpenSaveModal}
-                className="gap-1.5 text-xs py-2 font-bold"
-              >
-                <Bookmark className="w-3.5 h-3.5 text-[#6B0F1A]" />
-                <span>حفظ المجموعة</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* أزرار سريعة للأفراد بارزة 3D تشمل حتى 15 فرداً بنقرة واحدة */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-bold text-stone-500 block">اختيار سريع بنقرة واحدة:</span>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => {
-                    setPeopleCount(num);
+                    setPeopleCount(peopleCount + 1);
                     setSavedGroupId(null);
-                    if (activeTab >= num) setActiveTab(0);
+                    setActiveTab(peopleCount);
                   }}
-                  className={`w-11 h-11 shrink-0 rounded-2xl font-black text-sm transition-all select-none cursor-pointer flex items-center justify-center ${
-                    peopleCount === num
-                      ? 'bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-[0_4px_0_0_#3E080F] -translate-y-0.5'
-                      : 'bg-white text-stone-800 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
-                  }`}
+                  className="w-full h-[4.1rem] rounded-2xl border-2 border-dashed border-[#6B0F1A]/40 text-[#6B0F1A] font-black flex items-center justify-center gap-2 hover:bg-[#FAF0F0] hover:border-[#6B0F1A] active:scale-[0.98] transition-all cursor-pointer"
                 >
-                  {num}
+                  <Plus className="w-6 h-6 stroke-[3]" />
+                  <span>فرد</span>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* تبويبات الأفراد لو أكثر من شخص */}
-          {peopleCount > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pt-3 border-t-2 border-stone-100 pb-1">
-              {people.map((p, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveTab(idx)}
-                  className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
-                    activeTab === idx
-                      ? 'bg-[#6B0F1A] text-white border-2 border-[#3E080F] shadow-xs'
-                      : 'bg-[#F8F4EE] text-stone-700 hover:bg-stone-200 border border-stone-300'
-                  }`}
-                >
-                  {p.name || `فرد ${idx + 1}`}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* نموذج بيانات الفرد المحدد */}
-        {currentPerson && (
-          <div className="p-6 sm:p-8 rounded-[28px] bg-white border-2 border-[#E7D7C7] shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b-2 border-stone-100 pb-4 flex-wrap gap-3">
-              <div className="flex items-center gap-2.5 font-black text-lg text-[#1E1210]">
-                <User className="w-5 h-5 text-[#6B0F1A]" />
-                <span>بيانات {currentPerson.name || `الفرد ${activeTab + 1}`}</span>
-              </div>
-
-              {/* بطاقة الحرق الحي BMR و TDEE */}
-              <div className="flex items-center gap-3 text-xs bg-[#FAF0F0] px-4 py-2 rounded-2xl border border-[#6B0F1A]/20">
-                <div className="flex items-center gap-1.5 text-stone-800 font-extrabold">
-                  <Flame className="w-4 h-4 text-[#6B0F1A]" />
-                  <span>حرق الراحة:</span>
-                  <span className="font-black text-[#6B0F1A]">{liveBmr} سعرة</span>
-                </div>
-                <div className="h-4 w-px bg-stone-300" />
-                <div className="flex items-center gap-1.5 text-stone-800 font-extrabold">
-                  <Activity className="w-4 h-4 text-emerald-600" />
-                  <span>احتياج اليوم:</span>
-                  <span className="font-black text-emerald-800">{formatKcal(liveTdee)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* أزرار سريعة بنقرة واحدة لاختيار الفئة لتسهيل الاستخدام على الكيوسك */}
-            <div className="space-y-2">
-              <span className="text-xs font-black text-stone-700 flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-[#6B0F1A] stroke-[2.25]" />
-                <span>اختر فئة سريعة بنقرة واحدة (أو عدل يدوياً بالأسفل):</span>
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => applyPreset('young_man')}
-                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <UserCheck className="w-5 h-5 text-[#6B0F1A] stroke-[2.25]" />
-                  <span>شاب (متوسط)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('young_woman')}
-                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Sparkles className="w-5 h-5 text-rose-600 stroke-[2.25]" />
-                  <span>شابة (متوسط)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('child')}
-                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Smile className="w-5 h-5 text-amber-600 stroke-[2.25]" />
-                  <span>طفل (صغير)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('senior')}
-                  className="p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:translate-y-0.5 active:shadow-[0_0_0_0] active:translate-y-1 text-stone-800 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Heart className="w-5 h-5 text-[#6B0F1A] stroke-[2.25]" />
-                  <span>كبار السن</span>
-                </button>
-              </div>
-
-              {/* زر توفير الوقت: تطبيق المواصفات على الجميع بنقرة واحدة */}
-              {peopleCount > 1 && (
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-[#FEF9EE] border-2 border-[#D97706]/40 mt-3">
-                  <div className="text-xs">
-                    <span className="font-extrabold text-[#854D0E] block">تريد توفير الوقت للمجموعة؟</span>
-                    <span className="text-stone-600 text-[11px]">طبق مواصفات هذا الفرد على باقي الأفراد ({peopleCount - 1}) بنقرة واحدة</span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleApplyToAll}
-                    className="shrink-0 text-xs py-1.5 px-3 font-black"
-                  >
-                    <Users className="w-3.5 h-3.5 ml-1" />
-                    <span>تطبيق على الجميع</span>
-                  </Button>
-                </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-              <Input
-                label="الاسم (اختياري لكتابته على البون)"
-                type="text"
-                value={currentPerson.name}
-                onChange={(e) => updatePerson(activeTab, { name: e.target.value })}
-                placeholder={`فرد ${activeTab + 1}`}
-              />
+            {peopleCount > 1 && (
+              <div className="rounded-2xl bg-[#FAF0F0] border-2 border-[#6B0F1A]/20 px-4 py-3 flex items-center justify-between">
+                <span className="font-black text-[#6B0F1A]">الكل</span>
+                <span className="text-2xl font-black text-[#6B0F1A] tabular-nums">{groupShown.toLocaleString('en-US')}</span>
+              </div>
+            )}
+          </aside>
 
-              {/* الجنس */}
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-black text-[#1E1210]">الجنس</label>
-                <div className="grid grid-cols-2 gap-3">
+          {/* بيانات الفرد */}
+          {currentPerson && (
+            <section className="anim-fade-up min-h-0 rounded-[32px] bg-white/90 backdrop-blur border-2 border-[#E7D7C7] shadow-[0_18px_40px_-22px_rgba(43,24,16,0.35)] p-5 sm:p-6 flex flex-col gap-4" style={{ animationDelay: '160ms' }}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-2xl font-black flex items-center gap-2">
+                  <User className="w-6 h-6 text-[#6B0F1A]" />
+                  <span>{currentPerson.name || `فرد ${activeTab + 1}`}</span>
+                </h2>
+                <div className="flex-1" />
+                {PRESETS.map(({ key, label, icon: Icon }) => (
                   <button
+                    key={key}
                     type="button"
-                    onClick={() => updatePerson(activeTab, { gender: 'male' })}
-                    className={`py-3.5 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border-2 ${
-                      currentPerson.gender === 'male'
-                        ? 'bg-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F]'
-                        : 'bg-white text-stone-700 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
-                    }`}
+                    onClick={() => applyPreset(key)}
+                    className="h-12 px-5 rounded-full bg-[#F8F4EE] border-2 border-[#E7D7C7] hover:border-[#6B0F1A] hover:bg-[#FAF0F0] active:scale-95 font-black flex items-center gap-2 transition-all cursor-pointer"
                   >
-                    <User className="w-4 h-4 stroke-[2.5]" />
-                    <span>ذكر</span>
+                    <Icon className="w-5 h-5 text-[#6B0F1A]" />
+                    <span>{label}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => updatePerson(activeTab, { gender: 'female' })}
-                    className={`py-3.5 rounded-2xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border-2 ${
-                      currentPerson.gender === 'female'
-                        ? 'bg-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F]'
-                        : 'bg-white text-stone-700 border-[#D6C7B2] shadow-[0_3px_0_0_#C4B29A] hover:border-[#6B0F1A]'
-                    }`}
-                  >
-                    <User className="w-4 h-4 stroke-[2.5]" />
-                    <span>أنثى</span>
-                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-6 items-center">
+                <div className="flex flex-col items-center gap-3">
+                  <KcalRing value={liveTdee} caption="سعرة / يوم" />
+                  <div className="flex items-center justify-center gap-2 flex-wrap text-sm font-black tabular-nums">
+                    <span className="px-3 py-1 rounded-full border-2 bg-amber-50 text-amber-800 border-amber-300">كارب {macros.carbsG}جم</span>
+                    <span className="px-3 py-1 rounded-full border-2 bg-rose-50 text-rose-800 border-rose-300">بروتين {macros.proteinG}جم</span>
+                    <span className="px-3 py-1 rounded-full border-2 bg-sky-50 text-sky-800 border-sky-300">دهون {macros.fatG}جم</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1.6fr] gap-4">
+                    <div className="flex flex-col gap-2">
+                      <span className="text-sm font-black text-stone-600 px-1">النوع</span>
+                      <div className="grid grid-cols-2 gap-2 h-[5.25rem]">
+                        {([
+                          ['male', 'ذكر', Mars],
+                          ['female', 'أنثى', Venus],
+                        ] as const).map(([val, label, Icon]) => {
+                          const on = currentPerson.gender === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => updatePerson(activeTab, { gender: val })}
+                              className={`rounded-2xl border-2 font-black text-lg flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer ${
+                                on
+                                  ? 'bg-gradient-to-b from-[#8B1422] to-[#6B0F1A] text-white border-[#3E080F] shadow-[0_4px_0_0_#3E080F] -translate-y-0.5'
+                                  : 'bg-white text-stone-700 border-[#D6C7B2] shadow-[0_4px_0_0_#C4B29A] hover:border-[#6B0F1A]'
+                              }`}
+                            >
+                              <Icon className={`w-6 h-6 ${on ? 'scale-110' : ''} transition-transform`} />
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <span className="text-sm font-black text-stone-600 px-1">النشاط</span>
+                      <div className="grid grid-cols-4 gap-2 h-[5.25rem]">
+                        {ACTIVITY.map(({ id, label }, i) => {
+                          const on = currentPerson.activityLevel === id;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => updatePerson(activeTab, { activityLevel: id })}
+                              className={`rounded-2xl border-2 font-black flex flex-col items-center justify-center gap-1.5 transition-all duration-300 cursor-pointer ${
+                                on
+                                  ? 'bg-[#FEF9EE] border-[#D97706] text-[#854D0E] shadow-md -translate-y-0.5'
+                                  : 'bg-white border-[#D6C7B2] text-stone-600 hover:border-[#D97706]'
+                              }`}
+                            >
+                              <span className="flex items-end gap-0.5 h-4" aria-hidden="true">
+                                {[0, 1, 2, 3].map((b) => (
+                                  <span
+                                    key={b}
+                                    className={`w-1.5 rounded-sm transition-colors ${b <= i ? (on ? 'bg-[#D97706]' : 'bg-stone-400') : 'bg-stone-200'}`}
+                                    style={{ height: 5 + b * 3.5 }}
+                                  />
+                                ))}
+                              </span>
+                              <span className="text-sm">{label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <DialStepper label="العمر" unit="سنة" value={currentPerson.age || 25} min={10} max={100} onChange={(v) => updatePerson(activeTab, { age: v })} />
+                    <DialStepper label="الوزن" unit="كجم" value={currentPerson.weightKg || 70} min={25} max={250} onChange={(v) => updatePerson(activeTab, { weightKg: v })} />
+                    <DialStepper label="الطول" unit="سم" value={currentPerson.heightCm || 170} min={100} max={230} onChange={(v) => updatePerson(activeTab, { heightCm: v })} />
+                  </div>
                 </div>
               </div>
+            </section>
+          )}
+        </div>
 
-              {/* العمر مع TouchStepper */}
-              <TouchStepper
-                label="العمر (بالسنوات)"
-                value={currentPerson.age || 25}
-                min={5}
-                max={100}
-                unit="سنة"
-                onChange={(val) => updatePerson(activeTab, { age: val })}
-              />
-
-              {/* الوزن مع TouchStepper */}
-              <TouchStepper
-                label="الوزن (بالكيلوجرام)"
-                value={currentPerson.weightKg || 70}
-                min={20}
-                max={250}
-                unit="كجم"
-                onChange={(val) => updatePerson(activeTab, { weightKg: val })}
-              />
-
-              {/* الطول مع TouchStepper */}
-              <TouchStepper
-                label="الطول (بالسنتيمتر)"
-                value={currentPerson.heightCm || 170}
-                min={80}
-                max={230}
-                unit="سم"
-                onChange={(val) => updatePerson(activeTab, { heightCm: val })}
-              />
-
-              {/* مستوى النشاط البدني */}
-              <div className="space-y-1.5 text-right">
-                <label className="block text-sm font-black text-[#1E1210]">
-                  الحركة والنشاط اليومي
-                </label>
-                <select
-                  value={currentPerson.activityLevel}
-                  onChange={(e) =>
-                    updatePerson(activeTab, {
-                      activityLevel: e.target.value as ActivityLevel,
-                    })
-                  }
-                  className="w-full px-4 py-3 bg-white border-2 border-[#D6C7B2] rounded-2xl text-[#1E1210] font-bold focus:outline-none focus:border-[#6B0F1A] text-sm shadow-xs"
-                >
-                  <option value="sedentary">قليل الحركة / عمل مكتبي ودراسة</option>
-                  <option value="light">حركة خفيفة / يوم عادي</option>
-                  <option value="moderate">نشاط متوسط / تمرين 3 أيام أسبوعياً</option>
-                  <option value="active">نشاط عالي / تمرين يومي أو عمل حركي</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* أزرار التنقل */}
-        <div className="flex items-center justify-between pt-4">
-          <Button
-            variant="outline"
-            onClick={() => router.push('/')}
-            className="font-bold text-stone-800"
-          >
+        {/* الشريط السفلي */}
+        <div className="sticky bottom-0 z-20 -mx-5 sm:-mx-8 px-5 sm:px-8 py-3 bg-[#F8F4EE]/90 backdrop-blur-sm anim-fade-up flex items-center gap-3 flex-wrap" style={{ animationDelay: '240ms' }}>
+          <Button variant="outline" size="lg" onClick={() => router.push('/')} className="font-black">
             <ArrowRight className="w-5 h-5 ml-1.5" />
-            <span>رجوع للرئيسية</span>
+            <span>رجوع</span>
           </Button>
 
-          <Button size="lg" variant="primary" onClick={handleNext} className="gap-2 px-8 font-black text-base">
-            <span>التالي: تحديد الميزانية والوقت</span>
-            <ArrowLeft className="w-5 h-5 mr-1" />
+          <div className="flex-1" />
+
+          {peopleCount > 1 && (
+            <Button variant="outline" size="lg" onClick={handleApplyToAll} className="font-black">
+              <Copy className="w-5 h-5 ml-1.5 text-[#6B0F1A]" />
+              <span>طبّق على الكل</span>
+            </Button>
+          )}
+          <Button variant="outline" size="lg" onClick={openGroups} className="font-black">
+            <Users className="w-5 h-5 ml-1.5 text-[#6B0F1A]" />
+            <span>مجموعاتي</span>
+          </Button>
+          <Button variant="outline" size="lg" onClick={handleOpenSaveModal} className="font-black">
+            <Bookmark className="w-5 h-5 ml-1.5 text-[#6B0F1A]" />
+            <span>حفظ</span>
+          </Button>
+          <Button size="xl" variant="primary" onClick={handleNext} className="gap-2 px-12 font-black text-lg">
+            <span>التالي</span>
+            <ArrowLeft className="w-6 h-6 mr-1" />
           </Button>
         </div>
       </main>
+
+      {/* مودال المجموعات المحفوظة */}
+      {showGroupsModal && (
+        <div className="fixed inset-0 z-50 bg-[#1E1210]/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="anim-fade-up bg-white border-2 border-[#6B0F1A] rounded-[28px] p-6 sm:p-8 max-w-lg w-full relative shadow-2xl text-right space-y-4">
+            <button
+              onClick={() => setShowGroupsModal(false)}
+              aria-label="إغلاق"
+              className="absolute top-5 left-5 text-stone-400 hover:text-stone-700 p-1.5 rounded-full bg-stone-100 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-2xl font-black flex items-center gap-2">
+              <Users className="w-6 h-6 text-[#6B0F1A]" />
+              <span>مجموعاتي</span>
+            </h3>
+
+            {loadingGroups ? (
+              <div className="py-6 text-center text-stone-500">...</div>
+            ) : savedGroups.length === 0 ? (
+              <div className="py-8 text-center text-stone-500 font-bold">مفيش مجموعات محفوظة</div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {savedGroups.map((grp) => (
+                  <div
+                    key={grp.id}
+                    onClick={() => handleLoadGroup(grp)}
+                    className={`p-3.5 rounded-2xl border-2 flex items-center gap-3 cursor-pointer transition-all ${
+                      savedGroupId === grp.id ? 'bg-[#FAF0F0] border-[#6B0F1A]' : 'bg-white border-[#E7D7C7] hover:border-[#6B0F1A]/60'
+                    }`}
+                  >
+                    <Users className="w-5 h-5 text-[#6B0F1A]" />
+                    <div className="flex-1 font-black">{grp.name}</div>
+                    <span className="text-sm text-stone-500 font-bold">{grp.people.length}</span>
+                    <button
+                      type="button"
+                      aria-label="حذف"
+                      onClick={(e) => handleDeleteGroup(e, grp.id, grp.name)}
+                      className="p-2 rounded-lg hover:bg-red-100 text-stone-400 hover:text-red-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {currentUser && getDataMode() === 'supabase' && (
+              <button
+                type="button"
+                onClick={() => { setShowGroupsModal(false); handleLogout(); }}
+                className="text-sm text-stone-500 hover:text-red-600 font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>خروج</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* مودال حفظ المجموعة */}
       {showSaveModal && (
@@ -844,12 +627,7 @@ export default function PeopleStepPage() {
               <div className="p-3 bg-orange-100 rounded-2xl text-orange-600">
                 <Bookmark className="w-6 h-6" />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-stone-900">حفظ المجموعة الحالية</h3>
-                <p className="text-xs text-stone-500 font-medium">
-                  احفظ بيانات هذه المجموعة لتسترجعها بنقرة واحدة في أي زيارة قادمة!
-                </p>
-              </div>
+              <h3 className="text-xl font-black text-stone-900">حفظ المجموعة</h3>
             </div>
 
             {saveGroupError && (
@@ -862,7 +640,7 @@ export default function PeopleStepPage() {
               <Input
                 label="اسم المجموعة"
                 type="text"
-                placeholder="مثال: عائلتي، شلة النادي، أصحابي"
+                placeholder="مثال: عائلتي"
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 required
@@ -874,7 +652,7 @@ export default function PeopleStepPage() {
                 className="w-full mt-2"
                 size="lg"
               >
-                {isSavingGroup ? 'جاري الحفظ...' : 'حفظ المجموعة في حسابي'}
+                {isSavingGroup ? '...' : 'حفظ'}
               </Button>
             </form>
           </div>
@@ -896,12 +674,9 @@ export default function PeopleStepPage() {
               <div className="p-3 bg-orange-100 rounded-2xl text-orange-600">
                 <Sparkles className="w-6 h-6" />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-stone-900">
-                  {authMode === 'login' ? 'تسجيل الدخول' : 'فتح حساب لحفظ المجموعات'}
-                </h3>
-                <p className="text-xs text-stone-500 font-medium">لحفظ أفرادك والرجوع إليهم دائماً</p>
-              </div>
+              <h3 className="text-xl font-black text-stone-900">
+                {authMode === 'login' ? 'دخول' : 'حساب جديد'}
+              </h3>
             </div>
 
             {authError && (
@@ -913,7 +688,7 @@ export default function PeopleStepPage() {
             <form onSubmit={handleAuthSubmit} className="space-y-4">
               {authMode === 'register' && (
                 <Input
-                  label="اسمك الكريم"
+                  label="الاسم"
                   type="text"
                   placeholder="محمد أحمد"
                   value={authFullName}
@@ -923,7 +698,7 @@ export default function PeopleStepPage() {
               )}
 
               <Input
-                label="البريد الإلكتروني"
+                label="البريد"
                 type="email"
                 placeholder="name@example.com"
                 value={authEmail}
@@ -946,14 +721,14 @@ export default function PeopleStepPage() {
                 className="w-full mt-2"
                 size="lg"
               >
-                {authLoading ? 'جاري التحقق...' : authMode === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب'}
+                {authLoading ? '...' : authMode === 'login' ? 'دخول' : 'إنشاء حساب'}
               </Button>
             </form>
 
             <div className="text-center pt-2 border-t border-stone-100 text-xs text-stone-600">
               {authMode === 'login' ? (
                 <span>
-                  ليس لديك حساب؟{' '}
+                  مفيش حساب؟{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -962,12 +737,12 @@ export default function PeopleStepPage() {
                     }}
                     className="font-bold text-orange-600 hover:underline"
                   >
-                    إنشاء حساب جديد
+                    حساب جديد
                   </button>
                 </span>
               ) : (
                 <span>
-                  لديك حساب؟{' '}
+                  عندك حساب؟{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -976,7 +751,7 @@ export default function PeopleStepPage() {
                     }}
                     className="font-bold text-orange-600 hover:underline"
                   >
-                    تسجيل الدخول
+                    دخول
                   </button>
                 </span>
               )}

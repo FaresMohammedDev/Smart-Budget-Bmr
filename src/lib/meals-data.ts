@@ -1,5 +1,4 @@
 import { Meal } from '@/features/recommendations/domain/types';
-import { MealTime } from '@/features/nutrition/domain/types';
 
 /**
  * قائمة الوجبات الغنية لمطعم فتح الله ماركت
@@ -21,6 +20,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 280,
+    carbs_g: 35,
+    protein_g: 8,
+    fat_g: 12,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -38,6 +40,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 320,
+    carbs_g: 44,
+    protein_g: 14,
+    fat_g: 10,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -55,6 +60,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 420,
+    carbs_g: 55,
+    protein_g: 21,
+    fat_g: 13,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -72,6 +80,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 350,
+    carbs_g: 32,
+    protein_g: 19,
+    fat_g: 16,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -89,6 +100,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 430,
+    carbs_g: 32,
+    protein_g: 24,
+    fat_g: 23,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -106,6 +120,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 390,
+    carbs_g: 37,
+    protein_g: 16,
+    fat_g: 20,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -123,6 +140,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 270,
+    carbs_g: 28,
+    protein_g: 12,
+    fat_g: 12,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -140,6 +160,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 620,
+    carbs_g: 70,
+    protein_g: 9,
+    fat_g: 34,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -157,6 +180,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 440,
+    carbs_g: 57,
+    protein_g: 10,
+    fat_g: 19,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -178,6 +204,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 550,
+    carbs_g: 52,
+    protein_g: 38,
+    fat_g: 21,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -195,6 +224,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 610,
+    carbs_g: 52,
+    protein_g: 40,
+    fat_g: 27,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -212,6 +244,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 780,
+    carbs_g: 101,
+    protein_g: 39,
+    fat_g: 24,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -229,6 +264,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 520,
+    carbs_g: 44,
+    protein_g: 26,
+    fat_g: 27,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -246,6 +284,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 660,
+    carbs_g: 50,
+    protein_g: 33,
+    fat_g: 37,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -263,6 +304,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 490,
+    carbs_g: 44,
+    protein_g: 29,
+    fat_g: 22,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -280,6 +324,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: true, // عرض توفير طازج
     is_available: true,
     total_kcal: 720,
+    carbs_g: 79,
+    protein_g: 40,
+    fat_g: 27,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -297,6 +344,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 580,
+    carbs_g: 61,
+    protein_g: 46,
+    fat_g: 17,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -314,6 +364,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: true, // عرض توفير
     is_available: true,
     total_kcal: 890,
+    carbs_g: 89,
+    protein_g: 71,
+    fat_g: 28,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -331,6 +384,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: true, // عرض خاص
     is_available: true,
     total_kcal: 750,
+    carbs_g: 66,
+    protein_g: 41,
+    fat_g: 36,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -348,6 +404,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 830,
+    carbs_g: 62,
+    protein_g: 50,
+    fat_g: 42,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -365,6 +424,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 380,
+    carbs_g: 38,
+    protein_g: 28,
+    fat_g: 13,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -382,6 +444,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 620,
+    carbs_g: 62,
+    protein_g: 25,
+    fat_g: 30,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -399,6 +464,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: true, // عرض توفير طازج
     is_available: true,
     total_kcal: 2300,
+    carbs_g: 230,
+    protein_g: 92,
+    fat_g: 112,
     kind: 'main',
     portion_type: 'shareable',
     servings: 4,
@@ -416,6 +484,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 3200,
+    carbs_g: 224,
+    protein_g: 288,
+    fat_g: 128,
     kind: 'main',
     portion_type: 'shareable',
     servings: 5,
@@ -433,6 +504,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 690,
+    carbs_g: 72,
+    protein_g: 31,
+    fat_g: 31,
     kind: 'main',
     portion_type: 'individual',
     servings: 1,
@@ -454,6 +528,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 360,
+    carbs_g: 41,
+    protein_g: 4,
+    fat_g: 20,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -471,6 +548,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 50,
+    carbs_g: 8,
+    protein_g: 2,
+    fat_g: 2,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -488,6 +568,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 140,
+    carbs_g: 6,
+    protein_g: 4,
+    fat_g: 11,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -505,6 +588,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 180,
+    carbs_g: 3,
+    protein_g: 1,
+    fat_g: 18,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -522,6 +608,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 290,
+    carbs_g: 29,
+    protein_g: 10,
+    fat_g: 15,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -539,6 +628,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 160,
+    carbs_g: 14,
+    protein_g: 2,
+    fat_g: 10,
     kind: 'side',
     portion_type: 'individual',
     servings: 1,
@@ -560,6 +652,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 480,
+    carbs_g: 50,
+    protein_g: 10,
+    fat_g: 27,
     kind: 'dessert',
     portion_type: 'individual',
     servings: 1,
@@ -577,6 +672,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 310,
+    carbs_g: 48,
+    protein_g: 8,
+    fat_g: 10,
     kind: 'dessert',
     portion_type: 'individual',
     servings: 1,
@@ -594,6 +692,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 110,
+    carbs_g: 25,
+    protein_g: 2,
+    fat_g: 0,
     kind: 'drink',
     portion_type: 'individual',
     servings: 1,
@@ -611,6 +712,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 160,
+    carbs_g: 38,
+    protein_g: 1,
+    fat_g: 1,
     kind: 'drink',
     portion_type: 'individual',
     servings: 1,
@@ -628,6 +732,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 140,
+    carbs_g: 35,
+    protein_g: 0,
+    fat_g: 0,
     kind: 'drink',
     portion_type: 'individual',
     servings: 1,
@@ -645,6 +752,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 0,
+    carbs_g: 0,
+    protein_g: 0,
+    fat_g: 0,
     kind: 'drink',
     portion_type: 'individual',
     servings: 1,
@@ -662,6 +772,9 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
     is_expiring_soon: false,
     is_available: true,
     total_kcal: 95,
+    carbs_g: 17,
+    protein_g: 3,
+    fat_g: 2,
     kind: 'drink',
     portion_type: 'individual',
     servings: 1,
@@ -670,68 +783,5 @@ export const RICH_FATHALLA_MEALS: Meal[] = [
   },
 ];
 
-/**
- * دالة مساعدة للتحقق مما إذا كانت الوجبة مناسبة منطقياً للتوقيت المحدد
- */
-export function isMealAppropriateForTime(meal: Meal, time?: MealTime): boolean {
-  if (!time) return true;
-
-  // إذا كانت الوجبة لديها تعريف صريح للأوقات المناسبة
-  if (meal.meal_times && meal.meal_times.length > 0) {
-    return meal.meal_times.includes(time);
-  }
-
-  // قواعد افتراضية منطقية حسب اسم ونوع الوجبة لمنع التناقض:
-  const name = meal.name_ar;
-
-  // 1. وقت الإفطار (Breakfast):
-  if (time === 'breakfast') {
-    // ممنوع قطعياً: مكرونة بشاميل، مشويات، كفتة، كباب، لحمة مشوية، صواني، فراخ شواية
-    if (
-      name.includes('بشاميل') ||
-      name.includes('مشويات') ||
-      name.includes('كفتة') ||
-      name.includes('كباب') ||
-      name.includes('فرخة مشوية') ||
-      name.includes('شواية') ||
-      name.includes('بامية') ||
-      meal.portion_type === 'shareable'
-    ) {
-      return false;
-    }
-    // مناسب للإفطار: فول، طعمية، فلافل، بيض، شكشوكة، أجبان، فطير، بطاطس، شاي، عصائر، مياه
-    return (
-      name.includes('فول') ||
-      name.includes('طعمية') ||
-      name.includes('فلافل') ||
-      name.includes('بيض') ||
-      name.includes('شكشوكة') ||
-      name.includes('جبن') ||
-      name.includes('فطير') ||
-      name.includes('بطاطس') ||
-      meal.kind === 'drink' ||
-      meal.kind === 'side'
-    );
-  }
-
-  // 2. وقت السناك (Snack):
-  if (time === 'snack') {
-    // مخصص للأطباق الجانبية، المشروبات، الحلويات، أو الساندوتشات الخفيفة جداً
-    if (meal.portion_type === 'shareable') return false;
-    return meal.kind === 'side' || meal.kind === 'drink' || meal.kind === 'dessert' || meal.price <= 35;
-  }
-
-  // 3. وقت الغداء (Lunch):
-  if (time === 'lunch') {
-    // الغداء يقبل أغلب الوجبات الرئيسية والصواني والمشويات، ولا يفضل أن يقتصر على طبق فول سادة إذا توفرت الميزانية
-    return true;
-  }
-
-  // 4. وقت العشاء (Dinner):
-  if (time === 'dinner') {
-    // صواني العزائم الضخمة جداً لا تناسب العشاء الفردي الخفيف
-    return true;
-  }
-
-  return true;
-}
+// قواعد مناسبة الوجبة للتوقيت موجودة في محرك الترشيح (meal-rules) علشان تفضل مصدر واحد.
+export { mealFitsTime as isMealAppropriateForTime } from '@/features/recommendations/domain/meal-rules';

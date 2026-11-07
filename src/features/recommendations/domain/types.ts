@@ -26,6 +26,10 @@ export interface Meal {
   is_expiring_soon: boolean;
   is_available: boolean;
   total_kcal: number;
+  /** ماكروز الحصة بالجرام (اختيارية؛ لو مش موجودة بتتقدّر). */
+  carbs_g?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
   kind: MealKind;
   portion_type: PortionType;
   servings: number;
@@ -68,6 +72,7 @@ export interface PersonShareDetail {
 }
 
 export type EngineResult =
+  | { status: 'unavailable'; message: string }
   | {
       status: 'success';
       targetKcal: number;

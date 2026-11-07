@@ -13,6 +13,11 @@
   --fathalla-card: #FFFFFF;
 }
 
+/* الواجهة كلها بالـ rem: تكبر تلقائيًا على الشاشات الكبيرة */
+html {
+  font-size: clamp(12px, min(1.4vw, 2.2vh), 28px);
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #F8F4EE;
@@ -129,6 +134,104 @@ body {
 .btn-tactile-white:active {
   transform: translateY(4px);
   box-shadow: 0 0 0 0 #C4B29A;
+}
+
+/* حركات وتأثيرات الصفحة الرئيسية */
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(5vw, -4vh) scale(1.12); }
+  66% { transform: translate(-4vw, 4vh) scale(0.94); }
+}
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.14); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+@keyframes ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes shine-idle {
+  0% { transform: translateX(-140%) skewX(-18deg); }
+  16%, 100% { transform: translateX(520%) skewX(-18deg); }
+}
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0.4; }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes confetti {
+  0% { transform: translate3d(0, -10%, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate3d(var(--dx, 0px), 110vh, 0) rotate(var(--rot, 540deg)); opacity: 0.9; }
+}
+@keyframes shimmer-text {
+  to { background-position: 200% center; }
+}
+
+.anim-blob { animation: blob 18s ease-in-out infinite; }
+.anim-blob-slow { animation: blob 26s ease-in-out infinite reverse; }
+.anim-kenburns { animation: kenburns 7s ease-out forwards; }
+.anim-fade-up { animation: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-marquee { animation: marquee 48s linear infinite; }
+.anim-ring { animation: ring 2.4s ease-out infinite; }
+.anim-draw { stroke-dasharray: var(--len, 100); stroke-dashoffset: var(--len, 100); animation: draw 0.7s ease-out forwards; }
+.anim-confetti { animation: confetti var(--dur, 4s) linear var(--delay, 0s) both; }
+.anim-pop { animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.text-shimmer {
+  background: linear-gradient(90deg, #6B0F1A 0%, #E5A91E 45%, #6B0F1A 90%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 6s linear infinite;
+}
+
+.door-3d {
+  transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.25s ease-out, box-shadow 0.3s ease;
+  will-change: transform;
+}
+.door-3d:active { transform: perspective(1400px) scale(0.985); }
+.door-spot {
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.22), transparent 60%);
+}
+.door-shine::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 26%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-140%) skewX(-18deg);
+  animation: shine-idle 9s ease-in-out 2s infinite;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* حافة البون المسننة */
+.ticket-edge {
+  --s: 10px;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / var(--s) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / var(--s) 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-blob, .anim-blob-slow, .anim-kenburns, .anim-fade-up, .anim-marquee, .anim-ring, .anim-pop, .anim-draw, .anim-confetti,
+  .text-shimmer, .door-shine::after { animation: none !important; }
+  .door-3d { transition: none; }
 }
 
 /* طباعة بون الكاشير الحراري 80mm أبيض وأسود نظيف */

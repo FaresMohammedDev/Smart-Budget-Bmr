@@ -21,33 +21,31 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
       >
         {/* رأس البون */}
         <div className="text-center pb-2 border-b-2 border-dashed border-black">
-          <div className="text-base font-black tracking-wider uppercase">
-            فتح الله ماركت
+          <div dir="ltr" className="text-base font-black tracking-wider uppercase">
+            Smart Budget
           </div>
-          <div className="text-[10px] font-semibold">FATHALLA MARKET - 1948</div>
-          <div className="text-[10px] mt-0.5">قسم الوجبات الجاهزة والمطعم</div>
           <div className="text-xs font-bold mt-1 bg-black text-white py-0.5 px-2 inline-block rounded">
-            بون استلام وجبة #{order.order_number}
+            #{order.order_number}
           </div>
         </div>
 
         {/* تفاصيل الوقت والطلب */}
         <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
           <div className="flex justify-between">
-            <span>التاريخ:</span>
+            <span>التاريخ</span>
             <span>{formatDateTime(order.created_at)}</span>
           </div>
           <div className="flex justify-between">
-            <span>نوع الطلب:</span>
+            <span>النوع</span>
             <span className="font-bold">
               {order.order_mode === 'smart_budget'
-                ? `حساب ذكي (${order.people_count} أفراد)`
-                : 'طلب سريع مباشر'}
+                ? `ذكي · ${order.people_count} أفراد`
+                : 'منيو'}
             </span>
           </div>
           {order.budget && (
             <div className="flex justify-between">
-              <span>الميزانية المحددة:</span>
+              <span>الميزانية</span>
               <span>{formatEgp(order.budget)}</span>
             </div>
           )}
@@ -55,7 +53,6 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
 
         {/* جدول الوجبات */}
         <div className="py-2 border-b-2 border-dashed border-black">
-          <div className="font-bold text-[11px] mb-1">تفاصيل الوجبات:</div>
           <div className="space-y-2">
             {items.map((item, idx) => (
               <div key={idx} className="border-b border-dotted border-zinc-300 pb-1.5 last:border-none">
@@ -66,8 +63,8 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
                   <span>{formatEgp(item.line_total)}</span>
                 </div>
                 <div className="text-[9px] text-zinc-600 flex justify-between mt-0.5">
-                  <span>سعرات الصنف: {formatKcal(item.unit_kcal * item.quantity)}</span>
-                  <span>({formatEgp(item.unit_price)} للواحدة)</span>
+                  <span>{formatKcal(item.unit_kcal * item.quantity)}</span>
+                  <span>{formatEgp(item.unit_price)}</span>
                 </div>
 
                 {/* تفصيل مكونات الصنف والسعرات المحسوبة */}
@@ -89,16 +86,16 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
         {/* ملخص الحساب والسعرات */}
         <div className="py-2 border-b-2 border-dashed border-black space-y-1">
           <div className="flex justify-between text-xs font-black">
-            <span>إجمالي الحساب:</span>
+            <span>الإجمالي</span>
             <span>{formatEgp(order.total_price)}</span>
           </div>
           <div className="flex justify-between text-[10px] font-bold">
-            <span>إجمالي السعرات الحرارية:</span>
+            <span>السعرات</span>
             <span>{formatKcal(order.total_kcal)}</span>
           </div>
           {order.required_kcal && (
             <div className="flex justify-between text-[9px] text-zinc-600">
-              <span>الاحتياج الغذائي المستهدف:</span>
+              <span>الهدف</span>
               <span>{formatKcal(order.required_kcal)}</span>
             </div>
           )}
@@ -107,7 +104,7 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
         {/* نصيب كل فرد في حالة المجموعة */}
         {people.length > 0 && (
           <div className="py-2 border-b border-dashed border-black text-[9.5px]">
-            <div className="font-bold text-[10px] mb-1">نصيب كل فرد من الوجبة:</div>
+            <div className="font-bold text-[10px] mb-1">نصيب كل فرد</div>
             <div className="space-y-1">
               {people.map((p, pIdx) => (
                 <div key={pIdx} className="bg-zinc-100 p-1 rounded">
@@ -141,15 +138,8 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
           <div className="text-[8px] font-mono mt-1 text-zinc-600 uppercase">
             ID: {order.id.slice(0, 18)}...
           </div>
-          <div className="text-[9px] font-bold mt-1 text-zinc-900">
-            امسح الباركود لتأكيد الدفع والاستلام
-          </div>
         </div>
 
-        {/* رسالة الختام */}
-        <div className="text-center pt-1 text-[8.5px] text-zinc-500 border-t border-dotted border-zinc-400">
-          شكراً لتسوقكم في فتح الله ماركت · طازج يومياً
-        </div>
       </div>
     );
   }

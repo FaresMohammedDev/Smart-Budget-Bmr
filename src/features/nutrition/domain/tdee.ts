@@ -20,7 +20,7 @@ export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
  * @returns إجمالي السعرات اليومية المطلوبة
  */
 export function calculateTdee(bmr: number, activityLevel: ActivityLevel): number {
-  if (bmr <= 0) {
+  if (!Number.isFinite(bmr) || bmr <= 0) {
     throw new Error('قيمة BMR يجب أن تكون أكبر من الصفر');
   }
 

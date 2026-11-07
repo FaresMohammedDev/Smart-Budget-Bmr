@@ -1,16 +1,16 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-const FALLBACK_SUPABASE_URL = 'https://dvihewhnspmxyigdeikp.supabase.co';
-const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_b9v8HuohVD3vGcjRo3VmLQ_f74UhAhJ';
 
 export async function createClient() {
   const cookieStore = await cookies();
 
   const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || FALLBACK_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) throw new Error('تسجيل الحسابات متاح بعد إعداد اتصال Supabase. استخدم الدخول السريع للعرض المحلي.');
 
   return createServerClient(
     supabaseUrl,

@@ -1,13 +1,11 @@
-import {
-  EngineResult,
-  Meal,
-  RecommendationOption,
-  ComboItem,
-  RecommendationBadge,
-} from './types';
+import { EngineResult, Meal, RecommendationOption, ComboItem, RecommendationBadge } from './types';
 import { PersonNutrition, MealTime } from '../../nutrition/domain/types';
 import { calculateGroupShares } from './shares';
-import { isMealAppropriateForTime } from '@/lib/meals-data';
+import { canBeMain, isDipOrSalad, isLightFood, isSoda, mealFitsTime, trayFitsGroup } from './meal-rules';
+import { calculateMacroTargets, sumMealMacros } from '../../nutrition/domain/macros';
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+const unitPrice = (m: Meal) => m.discount_price ?? m.price;
 
 export interface RecommendParams {
   availableMeals: Meal[];
@@ -17,221 +15,260 @@ export interface RecommendParams {
   mealTime?: MealTime;
 }
 
-/**
- * محرك ترشيح الوجبات الذكي لمطعم فتح الله ماركت
- *
- * يراعي:
- * 1. منطقية وقت الوجبة (mealTime): منع التناقضات السخيفة كترشيح مكرونة بشاميل أو صواني عائلية للإفطار!
- * 2. الميزانية كحد أقصى حاسم.
- * 3. السعرات المستهدفة لمنع الهدر والوصول لأقرب قيمة إشباع.
- * 4. دعم الأعداد الكبيرة (أكثر من 6 أفراد: عائلات، مجموعات عمل، عزائم).
- * 5. تقديم وجبات أوشكت على انتهاء الصلاحية (is_expiring_soon) كعروض توفير خاصة فقط إذا كانت مناسبة لوقت الوجبة.
- * 6. معالجة حالات الميزانية المنخفضة (Edge Case) بسلاسة.
- */
-export function recommendMeals({
-  availableMeals,
-  targetKcal,
-  budget,
-  people = [],
-  mealTime,
-}: RecommendParams): EngineResult {
-  // تصفية الوجبات المتاحة مع مراعاة ملاءمتها لوقت الوجبة منطقياً
-  let activeMeals = availableMeals.filter(
-    (m) => m.is_available && m.total_kcal > 0 && isMealAppropriateForTime(m, mealTime)
-  );
+interface Candidate {
+  items: ComboItem[];
+  price: number;
+  kcal: number;
+  mainKcal: number;
+  empty: number; // سعرات المشروبات والحلويات
+  sodas: number;
+  desserts: number;
+  mains: number; // عدد الأصناف الأساسية المختلفة
+  units: number; // وحدات أساسية للفرد
+  lightMains: number; // عدد وحدات الأكل الخفيف (فول/طعمية) في الأساسي
+  addOns: number;
+}
 
-  // إذا لم تتوفر وجبات للتوقيت المحدد، نرجع للقائمة العامة المتاحة كأمان
-  if (activeMeals.length === 0) {
-    activeMeals = availableMeals.filter((m) => m.is_available && m.total_kcal > 0);
+/** كمية الصنف اللي بتغطي المجموعة. */
+const coverQty = (m: Meal, people: number) =>
+  m.portion_type === 'shareable' ? Math.ceil(people / Math.max(1, m.servings || 1)) : people;
+
+/** نطاقات قبول السعرات من الأضيق للأوسع، بنوسّع بس لو مفيش اقتراح منطقي. */
+const KCAL_RANGES: [number, number][] = [
+  [0.8, 1.2],
+  [0.65, 1.35],
+  [0.5, 1.6],
+];
+
+/**
+ * محرك ترشيح الوجبات.
+ *
+ * بيبني اقتراحات زي ما الناس بتاكل فعلًا:
+ *  - لازم وجبة أساسية، والمشروب/الحلو/الجانبي مجرد إضافة (مفيش علبة صودا غدا ولا طبق طحينة عشا).
+ *  - الأكل مناسب للوقت (مفيش بشاميل على الفطار) وحجم الصينية مناسب لعدد الأفراد.
+ *  - كل فرد ياخد وجبة أساسية (أو اتنين/تلاتة لو الأصناف صغيرة) مش صنف واحد مكرر بكميات غريبة.
+ *  - السعرات والماكروز قريبة من احتياج الوجبة، والمشروبات والحلويات متزيدش عن 30% من السعرات.
+ */
+export function recommendMeals({ availableMeals, targetKcal, budget, people = [], mealTime }: RecommendParams): EngineResult {
+  if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(targetKcal) || targetKcal <= 0) {
+    return { status: 'unavailable', message: 'راجع الميزانية وبيانات الأفراد.' };
   }
 
-  // إيجاد أرخص وجبة رئيسية لمعرفة ما إذا كانت الميزانية تكفي
-  const mainMeals = activeMeals.filter((m) => m.kind === 'main');
-  const cheapestMealPrice = Math.min(
-    ...activeMeals.map((m) => m.discount_price ?? m.price)
+  const peopleCount = Math.max(people.length, 1);
+  const perPerson = targetKcal / peopleCount;
+
+  const active = availableMeals.filter(
+    (m) =>
+      m.is_available &&
+      Number.isFinite(m.total_kcal) &&
+      m.total_kcal >= 0 &&
+      Number.isFinite(unitPrice(m)) &&
+      unitPrice(m) > 0 &&
+      mealFitsTime(m, mealTime)
   );
 
-  // حالة الميزانية القليلة جداً (Edge Case)
-  if (budget < cheapestMealPrice) {
-    const sideMeals = activeMeals.filter(
-      (m) => m.kind === 'side' || m.kind === 'drink' || m.kind === 'dessert'
-    );
-    const affordableSides = sideMeals.filter(
-      (m) => (m.discount_price ?? m.price) <= budget
-    );
+  // السناك أكل فعلي (ساندوتش/بطاطس/حلو)، مش سلطة ولا طحينة لوحدها
+  const isFoodSnack = (m: Meal) => m.kind !== 'drink' && m.total_kcal > 0 && !isDipOrSalad(m);
+  const mains = active.filter((m) => {
+    if (!trayFitsGroup(m, peopleCount)) return false;
+    return mealTime === 'snack' ? isFoodSnack(m) : canBeMain(m, mealTime);
+  });
+  if (!mains.length) return { status: 'unavailable', message: 'مفيش وجبات لهذا التوقيت. جرّب توقيت تاني أو المنيو.' };
 
-    // تجميع تشكيلة سريعة من الأطباق الخفيفة ضمن الميزانية
+  const baseCost = (m: Meal) => roundMoney(unitPrice(m) * coverQty(m, peopleCount));
+  const cheapestMealPrice = Math.min(...mains.map(baseCost));
+
+  // ميزانية قليلة: مش كفاية لأرخص وجبة أساسية للمجموعة
+  if (budget < cheapestMealPrice) {
+    const sideMeals = active.filter((m) => !mains.includes(m) && (m.kind === 'side' || m.kind === 'dessert' || m.kind === 'drink'));
+    const affordable = sideMeals
+      .filter((m) => unitPrice(m) <= budget)
+      .sort((a, b) => (a.kind === 'drink' ? 1 : 0) - (b.kind === 'drink' ? 1 : 0));
     const suggestedSides: ComboItem[] = [];
     let currentCost = 0;
     let currentKcal = 0;
-
-    for (const side of affordableSides) {
-      const price = side.discount_price ?? side.price;
-      if (currentCost + price <= budget) {
+    for (const side of affordable) {
+      const price = unitPrice(side);
+      if (roundMoney(currentCost + price) <= budget) {
         suggestedSides.push({ meal: side, quantity: 1 });
-        currentCost += price;
+        currentCost = roundMoney(currentCost + price);
         currentKcal += side.total_kcal;
       }
     }
-
     return {
       status: 'low_budget',
       budget,
       cheapestMealPrice,
       missingAmount: Math.round((cheapestMealPrice - budget) * 100) / 100,
-      apologyMessageAr: `ميزانيتك الحالية (${budget} ج.م) أقل من سعر وجبة متكاملة لوقت ${mealTime === 'breakfast' ? 'الإفطار' : mealTime === 'lunch' ? 'الغداء' : mealTime === 'dinner' ? 'العشاء' : 'السناك'} (${cheapestMealPrice} ج.م). نقترح عليك بعض الإضافات الخفيفة على قد ميزانيتك، أو زيادة الميزانية بمقدار ${Math.round(cheapestMealPrice - budget)} ج.م.`,
+      apologyMessageAr: `الميزانية (${budget} ج.م) أقل من أرخص وجبة (${cheapestMealPrice} ج.م). ينقصك ${Math.round(cheapestMealPrice - budget)} ج.م.`,
       suggestedSides,
       sidesTotalPrice: currentCost,
       sidesTotalKcal: currentKcal,
     };
   }
 
-  const candidateCombos: {
-    items: ComboItem[];
-    totalPrice: number;
-    totalKcal: number;
-    isExpiringSoon: boolean;
-  }[] = [];
+  // ---- الإضافات: جانبي / مشروب / حلو ----
+  const extras = active.filter((m) => !mains.includes(m) || m.kind === 'side');
+  const sides = extras.filter((m) => m.kind === 'side' && m.portion_type === 'individual' && !mains.includes(m)).slice(0, 5);
+  const drinks = extras.filter((m) => m.kind === 'drink' && m.portion_type === 'individual');
+  const desserts = mealTime === 'breakfast' ? [] : extras.filter((m) => m.kind === 'dessert' && m.portion_type === 'individual');
 
-  const peopleCount = Math.max(people.length, 1);
+  const half = Math.max(1, Math.ceil(peopleCount / 2));
+  const sideOptions: (ComboItem | null)[] = [null];
+  for (const s of sides) {
+    sideOptions.push({ meal: s, quantity: peopleCount });
+    if (peopleCount > 1) sideOptions.push({ meal: s, quantity: half });
+  }
+  const drinkOptions: (ComboItem | null)[] = [null, ...drinks.map((d) => ({ meal: d, quantity: peopleCount }))];
+  const dessertOptions: (ComboItem | null)[] = [null, ...desserts.map((d) => ({ meal: d, quantity: half }))];
 
-  // 1. توليد خيارات من صنف رئيسي واحد بعدد مناسب يدعم أعداد كبيرة (1 إلى 30 فرد)
-  for (const meal of activeMeals) {
-    const unitPrice = meal.discount_price ?? meal.price;
-    const maxQty = Math.floor(budget / unitPrice);
+  // ---- القواعد الأساسية: كل فرد وجبة أساسية، أو 2-3 لو الأصناف صغيرة ----
+  const bases: ComboItem[][] = [];
+  const individualMains = mains.filter((m) => m.portion_type === 'individual');
+  const trays = mains.filter((m) => m.portion_type === 'shareable');
 
-    // إذا كانت وجبة فردية، نحاول تقدير كمية تغطي عدد الأفراد
-    let minQty = 1;
-    if (meal.portion_type === 'individual') {
-      minQty = Math.min(peopleCount, maxQty);
-    } else {
-      // صواني تشاركية: صينية واحدة أو أكثر حسب عدد الأفراد وسعة الصينية
-      const neededTrays = Math.ceil(peopleCount / (meal.servings || 4));
-      minQty = Math.min(neededTrays, maxQty);
+  const unitsFor = (avgKcal: number) => {
+    const out = [1];
+    for (const u of [2, 3]) if (avgKcal * u <= perPerson * 1.3) out.push(u);
+    return out;
+  };
+
+  for (const m of individualMains) {
+    for (const u of unitsFor(m.total_kcal)) bases.push([{ meal: m, quantity: peopleCount * u }]);
+  }
+  if (peopleCount >= 2) {
+    for (let i = 0; i < individualMains.length; i++) {
+      for (let j = i + 1; j < individualMains.length; j++) {
+        const a = individualMains[i];
+        const b = individualMains[j];
+        for (const u of unitsFor((a.total_kcal + b.total_kcal) / 2)) {
+          const total = peopleCount * u;
+          const splits = new Set([Math.round(total / 2), Math.round(total * 0.67), Math.round(total * 0.34)]);
+          for (const qa of splits) {
+            if (qa < 1 || qa >= total) continue;
+            bases.push([{ meal: a, quantity: qa }, { meal: b, quantity: total - qa }]);
+          }
+        }
+      }
     }
+  }
+  for (const t of trays) bases.push([{ meal: t, quantity: coverQty(t, peopleCount) }]);
 
-    // سقف الكميات يدعم المجموعات الكبيرة حتى 40 وحدة
-    const upperLimit = Math.min(maxQty, Math.max(peopleCount * 2, 25));
-
-    for (let q = Math.max(1, minQty); q <= upperLimit; q++) {
-      const totalPrice = unitPrice * q;
-      if (totalPrice <= budget) {
-        candidateCombos.push({
-          items: [{ meal, quantity: q }],
-          totalPrice,
-          totalKcal: meal.total_kcal * q,
-          isExpiringSoon: meal.is_expiring_soon,
-        });
+  const candidates: Candidate[] = [];
+  for (const base of bases) {
+    const basePrice = base.reduce((sum, i) => sum + unitPrice(i.meal) * i.quantity, 0);
+    if (roundMoney(basePrice) > budget) continue;
+    const baseKcal = base.reduce((sum, i) => sum + i.meal.total_kcal * i.quantity, 0);
+    for (const side of sideOptions) {
+      for (const drink of drinkOptions) {
+        for (const dessert of dessertOptions) {
+          const items = [...base, ...[side, drink, dessert].filter((x): x is ComboItem => x !== null)];
+          const price = roundMoney(items.reduce((sum, i) => sum + unitPrice(i.meal) * i.quantity, 0));
+          if (price > budget) continue;
+          const kcal = items.reduce((sum, i) => sum + i.meal.total_kcal * i.quantity, 0);
+          const empty = (drink ? drink.meal.total_kcal * drink.quantity : 0) + (dessert ? dessert.meal.total_kcal * dessert.quantity : 0);
+          candidates.push({
+            items,
+            price,
+            kcal,
+            mainKcal: baseKcal,
+            empty,
+            sodas: drink && isSoda(drink.meal) ? 1 : 0,
+            desserts: dessert ? 1 : 0,
+            mains: base.length,
+            units: base.filter((b) => b.meal.portion_type === 'individual').reduce((sum, b) => sum + b.quantity, 0) / peopleCount,
+            lightMains: base.filter((b) => isLightFood(b.meal)).length,
+            addOns: items.length - base.length,
+          });
+        }
       }
     }
   }
 
-  // 2. توليد توليفات ثنائية (وجبة رئيسية + صنف جانبي / مشروب)
-  const sides = activeMeals.filter((m) => m.kind === 'side' || m.kind === 'drink' || m.kind === 'dessert');
-  for (const main of mainMeals) {
-    const mainPrice = main.discount_price ?? main.price;
-    if (mainPrice > budget) continue;
-
-    const mainQuantity = main.portion_type === 'individual' ? peopleCount : Math.ceil(peopleCount / (main.servings || 4));
-    const mainTotalCost = mainPrice * mainQuantity;
-    if (mainTotalCost > budget) continue;
-
-    for (const side of sides) {
-      const sidePrice = side.discount_price ?? side.price;
-      const sideQuantity = side.portion_type === 'individual' ? peopleCount : 1;
-      const combinedPrice = mainTotalCost + sidePrice * sideQuantity;
-
-      if (combinedPrice <= budget) {
-        candidateCombos.push({
-          items: [
-            { meal: main, quantity: mainQuantity },
-            { meal: side, quantity: sideQuantity },
-          ],
-          totalPrice: combinedPrice,
-          totalKcal: main.total_kcal * mainQuantity + side.total_kcal * sideQuantity,
-          isExpiringSoon: main.is_expiring_soon || side.is_expiring_soon,
-        });
-      }
-    }
+  // نطاقات السعرات: نبدأ بالأضيق ونوسّع بس لو مفيش اختيار
+  let pool: Candidate[] = [];
+  for (const [lo, hi] of KCAL_RANGES) {
+    pool = candidates.filter((c) => {
+      const r = c.kcal / targetKcal;
+      if (r < lo || r > hi) return false;
+      if (c.kcal > 0 && c.empty / c.kcal > 0.3) return false; // مشروب/حلو مايبقاش أكتر من 30% من الوجبة
+      if (c.mainKcal / c.kcal < 0.55) return false; // الأساسي هو اللي بيشبّع
+      return true;
+    });
+    if (pool.length) break;
   }
 
-  // تقييم كل خيار وحساب الـ Score
-  const scoredOptions: RecommendationOption[] = candidateCombos.map((combo, idx) => {
-    const kcalDiff = combo.totalKcal - targetKcal;
-    const diffPercent = Math.abs(kcalDiff) / (targetKcal || 1);
+  const macroTarget = calculateMacroTargets(targetKcal);
+  const rel = (v: number, t: number) => (t > 0 ? Math.abs(v - t) / t : 0);
 
-    // عقوبة الهدر الزائد أكثر من النقص البسيط
-    const kcalPenalty = kcalDiff > 0 ? diffPercent * 1.5 : diffPercent * 1.0;
+  const scored = pool.map((c) => {
+    const kcalDiff = c.kcal - targetKcal;
+    const diff = Math.abs(kcalDiff) / targetKcal;
+    const kcalPenalty = kcalDiff > 0 ? diff * 1.4 : diff;
+    const macros = sumMealMacros(c.items);
+    const macroPenalty = (rel(macros.carbsG, macroTarget.carbsG) + rel(macros.proteinG, macroTarget.proteinG) + rel(macros.fatG, macroTarget.fatG)) / 3;
+    const budgetPenalty = (c.price / budget) * 0.12;
+    const offer = c.items.some((i) => i.meal.is_expiring_soon);
+    const score =
+      kcalPenalty +
+      macroPenalty * 0.3 +
+      budgetPenalty +
+      c.sodas * 0.12 +
+      c.desserts * 0.04 +
+      c.addOns * 0.015 +
+      Math.max(0, c.units - 1) * (mealTime === 'breakfast' ? 0.03 : 0.06) +
+      (mealTime === 'lunch' ? c.lightMains * 0.08 : 0) -
+      (c.mains > 1 ? 0.05 : 0) -
+      (offer ? 0.05 : 0);
+    return { c, score, kcalDiff, offer };
+  });
+  scored.sort((a, b) => a.score - b.score);
 
-    // مكافأة التوفير في السعر
-    const budgetRatio = combo.totalPrice / budget;
+  // نختار 3 اقتراحات مختلفة فعلًا (أصناف أساسية مختلفة) مش نفس الوجبة بإضافات مختلفة
+  const picked: typeof scored = [];
+  const mainSignatures = new Set<string>();
+  for (const s of scored) {
+    const sig = s.c.items
+      .slice(0, s.c.mains)
+      .map((i) => i.meal.id)
+      .sort()
+      .join('|');
+    if (mainSignatures.has(sig)) continue;
+    mainSignatures.add(sig);
+    picked.push(s);
+    if (picked.length >= 3) break;
+  }
+  if (!picked.length) return { status: 'unavailable', message: 'مفيش اقتراح مناسب. غيّر الميزانية أو افتح المنيو.' };
 
-    // مكافأة للوجبات التي قاربت انتهاء الصلاحية فقط إذا كانت مناسبة لوقت الوجبة!
-    const isExpiringBonusAppropriate =
-      combo.isExpiringSoon &&
-      (!mealTime || combo.items.every((i) => isMealAppropriateForTime(i.meal, mealTime)));
-    const expiringBonus = isExpiringBonusAppropriate ? -2.5 : 0;
-
-    const score = kcalPenalty + budgetRatio * 0.2 + expiringBonus;
-
+  const cheapest = picked.reduce((min, s) => (s.c.price < min.c.price ? s : min), picked[0]);
+  const recommendations: RecommendationOption[] = picked.map((s, idx) => {
     let badge: RecommendationBadge = 'best_fit';
-    let title_ar = 'الأنسب لاحتياجك';
-
-    if (isExpiringBonusAppropriate) {
-      badge = 'special_offer';
-      title_ar = 'عرض فتح الله التوفيري الطازج';
-    } else if (combo.totalPrice < budget * 0.7) {
+    let title_ar = 'الأنسب';
+    if (idx > 0 && s === cheapest) {
       badge = 'saving';
-      title_ar = 'الخيار الأكثر توفيراً';
-    } else if (combo.totalKcal >= targetKcal * 0.95) {
+      title_ar = 'الأوفر';
+    } else if (s.offer) {
+      badge = 'special_offer';
+      title_ar = 'عرض';
+    } else if (idx > 0) {
       badge = 'filling';
-      title_ar = 'وجبة مشبعة ومتكاملة';
+      title_ar = 'بديل';
     }
-
     return {
-      id: `rec-${idx}-${combo.items[0]?.meal.id}`,
+      id: `rec-${idx}-${s.c.items[0]?.meal.id}`,
       title_ar,
       badge,
-      items: combo.items,
-      totalPrice: Math.round(combo.totalPrice * 100) / 100,
-      totalKcal: Math.round(combo.totalKcal * 100) / 100,
-      kcalDifference: Math.round(kcalDiff),
-      score,
-      isExpiringSoonOffer: combo.isExpiringSoon,
+      items: s.c.items,
+      totalPrice: Math.round(s.c.price * 100) / 100,
+      totalKcal: Math.round(s.c.kcal * 100) / 100,
+      kcalDifference: Math.round(s.kcalDiff),
+      score: s.score,
+      isExpiringSoonOffer: s.offer,
     };
   });
 
-  // الترتيب: الأقل Score (الأفضل) في البداية
-  scoredOptions.sort((a, b) => a.score - b.score);
+  const top = recommendations[0];
+  const sharesByPerson = people.length > 0 ? calculateGroupShares(people, top.items) : undefined;
 
-  // إزالة التكرارات المتطابقة وأخذ أفضل 5 ترشيحات
-  const uniqueRecommendations: RecommendationOption[] = [];
-  const seenSignatures = new Set<string>();
-
-  for (const opt of scoredOptions) {
-    const signature = opt.items
-      .map((i) => `${i.meal.id}x${i.quantity}`)
-      .sort()
-      .join('|');
-    if (!seenSignatures.has(signature)) {
-      seenSignatures.add(signature);
-      uniqueRecommendations.push(opt);
-    }
-    if (uniqueRecommendations.length >= 6) break;
-  }
-
-  // حساب نصيب الأفراد لأفضل ترشيح إذا كانت هناك مجموعة
-  const topOption = uniqueRecommendations[0];
-  const sharesByPerson =
-    people.length > 0 && topOption
-      ? calculateGroupShares(people, topOption.items)
-      : undefined;
-
-  return {
-    status: 'success',
-    targetKcal,
-    budget,
-    recommendations: uniqueRecommendations,
-    sharesByPerson,
-  };
+  return { status: 'success', targetKcal, budget, recommendations, sharesByPerson };
 }
